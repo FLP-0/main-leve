@@ -1,0 +1,48 @@
+# Configuration Upsun du site Main levée.
+# Le site tient dans un seul fichier statique, index.html : aucun serveur ne tourne, Upsun
+# sert le fichier directement, en HTTPS (obligatoire pour que le navigateur prête la caméra).
+applications:
+  main-leve:
+    # Aucun code Node ne s'exécute ; il faut seulement une image pour le conteneur.
+    type: "nodejs:24"
+    source:
+      root: "/"
+
+    build:
+      flavor: none
+
+    # Seul index.html est publié : le README et la configuration restent hors du site.
+    hooks:
+      build: |
+        set -e
+        mkdir -p public
+        cp index.html public/
+
+    web:
+      commands:
+        # Pas de serveur à lancer pour un site statique : un processus qui attend, sans
+        # consommer de processeur.
+        start: "sleep infinity"
+      locations:
+        "/":
+          root: "public"
+          index:
+            - "index.html"
+          scripts: false
+          allow: true
+          # Tout le site est dans index.html : un cache court pour que les mises à jour
+          # arrivent vite.
+          expires: 5m
+          headers:
+            X-Content-Type-Options: "nosniff"
+            Referrer-Policy: "strict-origin-when-cross-origin"
+            Permissions-Policy: "camera=(self), microphone=(), geolocation=()"
+
+routes:
+  "https://{default}/":
+    type: upstream
+    upstream: "main-leve:http"
+  # L'adresse avec « www » redirige vers la principale.
+  "https://www.{default}/":
+    type: redirect
+    to: "https://{default}/"

@@ -96,6 +96,36 @@ python3 -m http.server 8000
 
 Ouvre ensuite <http://localhost:8000> dans Chrome, puis clique sur « Activer la caméra ». Arrête le serveur avec `Ctrl+C`.
 
+## Mettre en ligne sur Upsun
+
+Le fichier `.upsun/config.yaml` décrit l'hébergement sur [Upsun](https://upsun.com/) :
+
+- **Fichiers publiés :** seul `index.html` est mis en ligne, copié dans `public/` au moment de la construction. Le README et la configuration ne sont pas servis.
+- **Serveur :** aucun ne tourne. Upsun sert le fichier tel quel, et un simple `sleep infinity` occupe le conteneur sans consommer de processeur.
+- **HTTPS :** le site est servi en HTTPS, ce qui est nécessaire pour que le navigateur prête la caméra. L'adresse avec `www` redirige vers celle sans `www`.
+- **Cache :** il est court (5 minutes), pour qu'une mise à jour arrive vite.
+- **En-têtes :** la caméra est autorisée pour le site lui-même seulement ; micro et position sont refusés.
+
+Vérifier la configuration, sans rien envoyer :
+
+```bash
+upsun lint
+```
+
+Première mise en ligne. La création d'un projet Upsun est payante : elle demande l'organisation, la région et l'offre.
+
+```bash
+upsun project:create --title "Main levée" --set-remote
+```
+
+Puis, à chaque mise à jour, depuis la branche `main` :
+
+```bash
+upsun push
+```
+
+`upsun url` ouvre ensuite le site en ligne.
+
 ## Comment ça marche
 
 Tout est dans `index.html`, découpé en sections commentées :
@@ -148,4 +178,3 @@ mainLevee.STYLES.map(s => s.name);
 - Changer de couleur en pointant une pastille avec le doigt.
 - Plusieurs cadres à la fois, chacun avec son style.
 - Un cadre à six coins : ajouter le creux entre le pouce et l'index de chaque main (points 2 et 5).
-- Mettre le site en ligne (GitHub Pages sert en `https://`, donc la caméra y fonctionne).
