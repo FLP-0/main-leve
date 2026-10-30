@@ -19,6 +19,7 @@
     --ok: #1f7a4d;
     --warn: #9a6200;
     --bad: #b3261e;
+    --red: #d62828;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -33,6 +34,7 @@
       --ok: #5cc794;
       --warn: #e5b45a;
       --bad: #ff8a80;
+      --red: #ff5b5b;
       color-scheme: dark;
     }
   }
@@ -109,6 +111,7 @@
     cursor: pointer;
   }
   button.tool:hover { border-color: var(--muted); }
+  .greeting { color: var(--red); font-weight: 600; }
   button.tool.recording { border-color: var(--bad); color: var(--bad); font-weight: 600; }
   button.tool[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--on-accent); font-weight: 600; }
   select {
@@ -209,6 +212,7 @@
     <button id="clear" class="tool" type="button">Effacer</button>
     <button id="photo" class="tool" type="button" title="Raccourci : P">Photo</button>
     <button id="record" class="tool" type="button" title="Raccourci : R">Filmer</button>
+    <span class="greeting">Salut Bertille</span>
   </div>
 </div>
 
