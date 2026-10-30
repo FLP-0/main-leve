@@ -110,6 +110,7 @@
   }
   button.tool:hover { border-color: var(--muted); }
   button.tool.recording { border-color: var(--bad); color: var(--bad); font-weight: 600; }
+  button.tool[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--on-accent); font-weight: 600; }
   select {
     font: inherit;
     padding: 4px 8px;
@@ -193,6 +194,7 @@
   <div class="group" role="group" aria-labelledby="color-label">
     <span id="color-label" class="label">Couleur</span>
     <span id="swatches" class="group"></span>
+    <button id="eraser" class="tool" type="button" aria-pressed="false" title="Raccourci : E">Gomme</button>
   </div>
   <div class="group">
     <label for="size" class="label">Épaisseur</label>
@@ -221,6 +223,7 @@
         <h2>Dessine et cadre avec tes mains</h2>
         <ul>
           <li><b>Dessin</b> pince pouce contre index pour tracer, clique des deux mains pour un trait droit</li>
+          <li><b>Gomme</b> choisis « Gomme » (touche E) : la pince efface au lieu de tracer, à l'épaisseur du curseur</li>
           <li><b>Effacer</b> garde une main en poing une seconde, en mode Dessin comme en mode Cadre</li>
           <li><b>Annuler</b> lève l'index et le majeur, pouce écarté, puis referme la main en poing : seul le dernier trait s'efface</li>
           <li><b>Cadre</b> écarte le pouce et l'index de chaque main : ces quatre doigts sont les coins d'un cadre libre, dont l'intérieur change de style</li>
@@ -301,6 +304,8 @@ const DETECT_INTERVAL_MS = 1000 / 30;
 const HAND_CONFIDENCE = 0.15;
 
 const COLORS = ['#00c2d1', '#ff5b5b', '#ffd23f', '#7ae582', '#ffffff'];
+// La gomme à l'écran : le curseur et l'aperçu du trait droit, en blanc translucide.
+const ERASER_TINT = 'rgba(255, 255, 255, 0.35)';
 const STAGE_BACKGROUND = '#10141b';
 
 // Les 21 points de la main donnés par MediaPipe (0 = poignet, 4 = bout du pouce, 8 = bout de l'index…).
@@ -344,6 +349,9 @@ const state = {
   current: null,
   color: COLORS[0],
   size: 10,
+  // Gomme : la pince efface au lieu de dessiner, avec la même épaisseur. Un coup de gomme
+  // est un trait comme un autre (erase: true), que l'on peut donc annuler.
+  eraser: false,
   cursor: null,
   pinching: false,
   fistSince: 0,
@@ -614,7 +622,7 @@ function handleLine(hands) {
   }
   if (state.line) {
     // Une main s'ouvre : le trait se pose.
-    state.strokes.push({ color: state.color, size: state.size, points: [state.line.from, state.line.to] });
+    state.strokes.push(newStroke([state.line.from, state.line.to]));
     renderDrawing();
     state.line = null;
     state.waitRelease = true;
@@ -706,7 +714,7 @@ function handleDrawing(hand) {
     setPill('hand-pill', 'Main : ferme le poing pour annuler le dernier trait', 'ok');
   } else if (state.pinching && !state.waitRelease && !undoing) {
     addPoint(state.cursor);
-    setPill('hand-pill', 'Main : dessine', 'ok');
+    setPill('hand-pill', state.eraser ? 'Main : gomme' : 'Main : dessine', 'ok');
   } else {
     endStroke();
     setPill('hand-pill', state.waitRelease ? 'Mains : trait posé, ouvre les mains' : 'Main : ouverte', 'ok');
@@ -1380,9 +1388,16 @@ function drawFrameDecor(corners, label, alpha, now) {
 // Dessin
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Un trait de la couleur choisie, ou un coup de gomme, à l'épaisseur choisie.
+function newStroke(points) {
+  return state.eraser
+    ? { erase: true, size: state.size, points }
+    : { color: state.color, size: state.size, points };
+}
+
 function addPoint(point) {
   if (!state.current) {
-    state.current = { color: state.color, size: state.size, points: [] };
+    state.current = newStroke([]);
     state.strokes.push(state.current);
     state.strokeStartedAt = performance.now();
   }
@@ -1410,12 +1425,20 @@ function undo() {
   renderDrawing();
 }
 
-// Trace un trait en courbes douces qui passent entre les points.
+// Trace un trait en courbes douces qui passent entre les points. Un coup de gomme suit le
+// même tracé, mais rend transparent le dessin qu'il recouvre.
 function drawStroke(ctx, stroke, width, height, scale) {
+  ctx.save();
+  if (stroke.erase) ctx.globalCompositeOperation = 'destination-out';
+  tracePath(ctx, stroke, width, height, scale);
+  ctx.restore();
+}
+
+function tracePath(ctx, stroke, width, height, scale) {
   const points = stroke.points;
   if (points.length === 0) return;
-  ctx.strokeStyle = stroke.color;
-  ctx.fillStyle = stroke.color;
+  ctx.strokeStyle = stroke.color ?? '#000';
+  ctx.fillStyle = stroke.color ?? '#000';
   ctx.lineWidth = stroke.size * scale;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -1482,12 +1505,14 @@ function drawOverlay(hands) {
   const y = state.cursor.y * height;
   const radius = Math.max(8, state.size / 2 + 4) * state.dpr;
   overlayCtx.lineWidth = 2.5 * state.dpr;
-  overlayCtx.strokeStyle = state.color;
+  overlayCtx.strokeStyle = state.eraser ? '#ffffff' : state.color;
+  overlayCtx.setLineDash(state.eraser ? [4 * state.dpr, 4 * state.dpr] : []);
   overlayCtx.beginPath();
   overlayCtx.arc(x, y, radius, 0, Math.PI * 2);
   overlayCtx.stroke();
+  overlayCtx.setLineDash([]);
   if (state.pinching) {
-    overlayCtx.fillStyle = state.color;
+    overlayCtx.fillStyle = state.eraser ? ERASER_TINT : state.color;
     overlayCtx.beginPath();
     overlayCtx.arc(x, y, (state.size / 2) * state.dpr, 0, Math.PI * 2);
     overlayCtx.fill();
@@ -1516,11 +1541,12 @@ function drawSkeleton(ctx, hands, width, height) {
   }
 }
 
-// Aperçu du trait droit, de la couleur et de l'épaisseur choisies, avec un anneau sur
-// chaque main.
+// Aperçu du trait droit, de la couleur et de l'épaisseur choisies (en blanc translucide
+// pour la gomme), avec un anneau sur chaque main.
 function drawLinePreview(width, height) {
   const { from, to } = state.line;
-  drawStroke(overlayCtx, { color: state.color, size: state.size, points: [from, to] }, width, height, state.dpr);
+  const color = state.eraser ? ERASER_TINT : state.color;
+  drawStroke(overlayCtx, { color, size: state.size, points: [from, to] }, width, height, state.dpr);
   const radius = Math.max(8, state.size / 2 + 4) * state.dpr;
   overlayCtx.lineWidth = 2.5 * state.dpr;
   overlayCtx.strokeStyle = '#ffffff';
@@ -1655,23 +1681,32 @@ function setMode(mode) {
   Object.assign(state.frame, { corners: null, target: null, presence: 0 });
 }
 
+// La gomme et les couleurs s'excluent : choisir une couleur repose la gomme.
+function setEraser(on) {
+  state.eraser = on;
+  $('eraser').setAttribute('aria-pressed', String(on));
+  for (const swatch of $('swatches').children) {
+    swatch.setAttribute('aria-pressed', String(!on && swatch.dataset.color === state.color));
+  }
+}
+
 function setupTools() {
   const swatches = $('swatches');
   for (const color of COLORS) {
     const swatch = document.createElement('button');
     swatch.type = 'button';
     swatch.className = 'swatch';
+    swatch.dataset.color = color;
     swatch.style.background = color;
     swatch.setAttribute('aria-label', `Couleur ${color}`);
-    swatch.setAttribute('aria-pressed', String(color === state.color));
     swatch.addEventListener('click', () => {
       state.color = color;
-      for (const other of swatches.children) {
-        other.setAttribute('aria-pressed', String(other === swatch));
-      }
+      setEraser(false);
     });
     swatches.append(swatch);
   }
+  setEraser(false);
+  $('eraser').addEventListener('click', () => setEraser(!state.eraser));
 
   const select = $('style');
   STYLES.forEach((style, index) => select.add(new Option(style.name, String(index))));
@@ -1698,6 +1733,8 @@ function setupTools() {
       return;
     } else if (key === 'm') {
       setMode(state.mode === 'draw' ? 'frame' : 'draw');
+    } else if (key === 'e') {
+      setEraser(!state.eraser);
     } else if (key === 'f') {
       nextStyle();
     } else if (key === 'p') {
@@ -1715,7 +1752,7 @@ loadModel();
 requestAnimationFrame(loop);
 
 // Pour expérimenter depuis la console du navigateur, par exemple : mainLevee.setStyle(3)
-window.mainLevee = { state, STYLES, setMode, setStyle };
+window.mainLevee = { state, STYLES, setMode, setStyle, setEraser };
 </script>
 </body>
 </html>

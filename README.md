@@ -13,7 +13,7 @@ On passe de l'un à l'autre avec les boutons « Dessin » et « Cadre » de la b
 | Geste | Effet |
 | --- | --- |
 | Main ouverte | déplace le curseur |
-| Pince (pouce contre index) | dessine |
+| Pince (pouce contre index) | dessine ; avec la gomme, efface |
 | Clic des deux mains à la fois | trace un trait droit d'une pince à l'autre ; il suit les mains tant qu'elles restent fermées et se pose quand l'une s'ouvre |
 | Poing maintenu une seconde | efface tout |
 | Deux doigts levés (index et majeur, pouce écarté), puis poing | annule le dernier trait ; ce poing n'efface pas le reste, même tenu longtemps |
@@ -21,6 +21,12 @@ On passe de l'un à l'autre avec les boutons « Dessin » et « Cadre » de la b
 Pour annuler, les deux doigts doivent rester levés un instant (0,15 seconde), puis la main se referme en moins de 0,6 seconde. Une main qui se referme d'un coup ne fait donc qu'un poing ordinaire. La pastille affiche « ferme le poing pour annuler le dernier trait » dès qu'elle voit les deux doigts. Pour annuler encore un trait, on relève les deux doigts puis on referme. Après une annulation, il faut rouvrir la main avant qu'un poing efface tout.
 
 Pour le trait droit, la première main fermée commence souvent un petit trait à main levée juste avant l'autre. Ce petit trait, commencé moins d'une demi-seconde avant le clic, est retiré. Une fois le trait droit posé, il faut ouvrir les deux mains avant de redessiner. « Annuler » enlève le trait droit d'un coup.
+
+### Gomme
+
+Le bouton « Gomme », à côté des couleurs (touche `E`), change la pince en gomme pinceau : elle efface le dessin là où elle passe, à l'épaisseur réglée par le curseur « Épaisseur », comme le feutre. Le clic des deux mains trace alors un trait droit qui efface. À l'écran, le curseur devient un cercle blanc en pointillés et la pastille indique « Main : gomme ». Choisir une couleur repose la gomme.
+
+Un coup de gomme compte comme un trait : « Annuler », `Cmd+Z` ou deux doigts levés puis poing font réapparaître ce qu'il avait effacé.
 
 ### Cadre
 
@@ -70,6 +76,7 @@ On choisit le style dans la liste « Style du cadre », avec la touche `F` ou en
 | Touche | Effet |
 | --- | --- |
 | `M` | change de mode |
+| `E` | prend ou repose la gomme |
 | `F` | style suivant |
 | `P` | photo |
 | `R` | démarre ou arrête la vidéo |
@@ -138,7 +145,6 @@ mainLevee.STYLES.map(s => s.name);
 
 ## Idées pour aller plus loin
 
-- Une gomme qui efface là où passe le doigt : un autre geste, par exemple la main à plat.
 - Changer de couleur en pointant une pastille avec le doigt.
 - Plusieurs cadres à la fois, chacun avec son style.
 - Un cadre à six coins : ajouter le creux entre le pouce et l'index de chaque main (points 2 et 5).
