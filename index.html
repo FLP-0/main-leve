@@ -1,0 +1,1455 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Main levée</title>
+<style>
+  /* Une scène sombre pour la vidéo, entourée d'outils sobres qui suivent le thème du système. */
+  :root {
+    --bg: #eef0f3;
+    --panel: #ffffff;
+    --fg: #1b1f27;
+    --muted: #5f6878;
+    --line: #d9dde4;
+    --accent: #0b7a75;
+    --on-accent: #ffffff;
+    --stage: #10141b;
+    --stage-fg: #e7eaf0;
+    --ok: #1f7a4d;
+    --warn: #9a6200;
+    --bad: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1218;
+      --panel: #171b23;
+      --fg: #e7eaf0;
+      --muted: #98a1b2;
+      --line: #2a303b;
+      --accent: #4fd1c5;
+      --on-accent: #062523;
+      --stage: #07090c;
+      --ok: #5cc794;
+      --warn: #e5b45a;
+      --bad: #ff8a80;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  /* Sans cette règle, un `display` posé en CSS (comme celui de .intro) empêche `hidden` de cacher l'élément. */
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    color: var(--fg);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+
+  header, .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 18px;
+    padding: 10px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+  }
+  h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
+  .status { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .pill.ok { color: var(--ok); }
+  .pill.warn { color: var(--warn); }
+  .pill.bad { color: var(--bad); }
+
+  .group { display: flex; align-items: center; gap: 8px; }
+  .label { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.07em; }
+  .segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .segmented button {
+    font: inherit;
+    padding: 5px 14px;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .segmented button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .swatch {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 2px solid var(--panel);
+    border-radius: 50%;
+    outline: 2px solid var(--line);
+    cursor: pointer;
+  }
+  .swatch[aria-pressed="true"] { outline-color: var(--fg); }
+  button.tool {
+    font: inherit;
+    padding: 5px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--fg);
+    cursor: pointer;
+  }
+  button.tool:hover { border-color: var(--muted); }
+  button.tool.recording { border-color: var(--bad); color: var(--bad); font-weight: 600; }
+  select {
+    font: inherit;
+    padding: 4px 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--fg);
+  }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  input[type="range"] { width: 110px; accent-color: var(--accent); }
+  label.check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  input[type="checkbox"] { accent-color: var(--accent); }
+
+  main { flex: 1; min-height: 0; display: grid; place-items: center; padding: 16px; }
+  .stage {
+    position: relative;
+    width: 640px;
+    height: 480px;
+    max-width: 100%;
+    overflow: hidden;
+    border-radius: 12px;
+    background: var(--stage);
+  }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  /* La vidéo sert seulement de source : la scène la redessine en miroir sur un canvas. */
+  .stage video { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+  .intro {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    color: var(--stage-fg);
+  }
+  .intro-card { max-width: 420px; display: grid; gap: 14px; text-align: left; }
+  .intro h2 { margin: 0; font-size: 20px; text-wrap: balance; }
+  .intro ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .intro li { display: grid; grid-template-columns: 104px 1fr; gap: 10px; color: #b9c0cd; }
+  .intro li b { color: var(--stage-fg); font-weight: 600; }
+  .intro .start {
+    justify-self: start;
+    font: inherit;
+    font-weight: 600;
+    padding: 10px 18px;
+    border: 0;
+    border-radius: 8px;
+    background: #4fd1c5;
+    color: #062523;
+    cursor: pointer;
+  }
+  .intro .start:disabled { opacity: 0.6; cursor: wait; }
+  .intro .error { margin: 0; color: #ff8a80; }
+  .intro .privacy { margin: 0; font-size: 12.5px; color: #8a93a3; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Main levée</h1>
+  <div class="status">
+    <span id="record-pill" class="pill bad" hidden>Enregistrement 00:00</span>
+    <span id="model-pill" class="pill">Modèle : en attente</span>
+    <span id="camera-pill" class="pill">Caméra : éteinte</span>
+    <span id="hand-pill" class="pill">Main : —</span>
+    <span id="fps-pill" class="pill">— i/s</span>
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="group" role="group" aria-label="Mode">
+    <span class="label">Mode</span>
+    <span class="segmented">
+      <button id="mode-draw" type="button" aria-pressed="true" title="Raccourci : M">Dessin</button>
+      <button id="mode-frame" type="button" aria-pressed="false" title="Raccourci : M">Cadre</button>
+    </span>
+  </div>
+  <div class="group">
+    <label for="style" class="label">Style du cadre</label>
+    <select id="style" title="Style suivant : F"></select>
+  </div>
+  <div class="group" role="group" aria-labelledby="color-label">
+    <span id="color-label" class="label">Couleur</span>
+    <span id="swatches" class="group"></span>
+  </div>
+  <div class="group">
+    <label for="size" class="label">Épaisseur</label>
+    <input id="size" type="range" min="2" max="40" value="10">
+  </div>
+  <div class="group">
+    <label class="check"><input id="show-video" type="checkbox" checked> Vidéo</label>
+    <label class="check"><input id="show-skeleton" type="checkbox" checked> Squelette</label>
+  </div>
+  <div class="group">
+    <button id="undo" class="tool" type="button" title="Raccourci : Cmd+Z">Annuler</button>
+    <button id="clear" class="tool" type="button">Effacer</button>
+    <button id="photo" class="tool" type="button" title="Raccourci : P">Photo</button>
+    <button id="record" class="tool" type="button" title="Raccourci : R">Filmer</button>
+  </div>
+</div>
+
+<main>
+  <div id="stage" class="stage">
+    <video id="video" playsinline muted></video>
+    <canvas id="scene"></canvas>
+    <canvas id="drawing"></canvas>
+    <canvas id="overlay"></canvas>
+    <div id="intro" class="intro">
+      <div class="intro-card">
+        <h2>Dessine et cadre avec tes mains</h2>
+        <ul>
+          <li><b>Dessin</b> pince pouce contre index pour tracer</li>
+          <li><b>Effacer</b> garde une main en poing une seconde, en mode Dessin comme en mode Cadre</li>
+          <li><b>Cadre</b> écarte le pouce et l'index de chaque main : ces quatre doigts sont les coins d'un cadre libre, dont l'intérieur change de style</li>
+          <li><b>Style suivant</b> clique avec les deux mains en même temps (pouce contre index) pendant le cadre</li>
+        </ul>
+        <button id="start" class="start" type="button">Activer la caméra</button>
+        <p id="error" class="error" hidden></p>
+        <p class="privacy">La vidéo reste dans ton navigateur : rien n'est envoyé.</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script type="module">
+// ─────────────────────────────────────────────────────────────────────────────
+// Réglages : c'est ici que tu ajustes le comportement.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// MediaPipe Hand Landmarker (Google) : la bibliothèque et son modèle, servis par des CDN.
+const MEDIAPIPE_VERSION = '1.1.1';
+const MEDIAPIPE_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}`;
+const MODEL_URL =
+  'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+
+// La pince se mesure en "écart pouce-index / taille de la paume", pour que ça marche
+// que ta main soit près ou loin de la caméra. Deux seuils différents évitent les traits
+// hachés quand on hésite autour de la limite.
+const PINCH_START = 0.3;
+const PINCH_END = 0.45;
+
+// Lissage du curseur : 1 = brut (tremble), plus petit = plus lisse mais plus lent.
+const SMOOTHING = 0.35;
+
+// Durée pendant laquelle il faut garder le poing fermé pour tout effacer.
+const FIST_HOLD_MS = 900;
+
+// Mode Cadre, réglé comme fingerframe.app. L'écart pouce-index se mesure comme la pince,
+// en part de la paume : il faut bien écarter les doigts pour ouvrir le cadre, mais un petit
+// écart suffit pour le garder, pour qu'il ne disparaisse pas dès qu'on se relâche.
+const FRAME_OPEN_RATIO = 0.75;
+const FRAME_KEEP_RATIO = 0.35;
+// Aire minimale du cadre, en part de l'image, pour l'ouvrir puis pour le garder.
+const FRAME_OPEN_AREA = 0.005;
+const FRAME_KEEP_AREA = 0.0005;
+// Lissage adaptatif, compté par image à 60 i/s : le cadre rattrape 35 % de l'écart quand
+// les doigts bougent peu (pas de tremblement), jusqu'à 85 % quand ils bougent de 5 % de la
+// largeur ou plus (pas de retard).
+const FRAME_FOLLOW_MIN = 0.35;
+const FRAME_FOLLOW_MAX = 0.85;
+const FRAME_FAST_MOVE = 0.05;
+// Doigts perdus : le cadre reste en place ce temps, puis s'efface en fondu.
+const FRAME_GRACE_MS = 400;
+const FRAME_FADE_IN_MS = 150;
+const FRAME_FADE_OUT_MS = 300;
+// Délai minimal entre deux changements de style par la pince.
+const STYLE_COOLDOWN_MS = 700;
+// La détection tourne sur une copie réduite de l'image, au plus 30 fois par seconde en
+// mode Cadre ; l'affichage, lui, suit chaque rafraîchissement de l'écran.
+const DETECT_WIDTH = 640;
+const DETECT_INTERVAL_MS = 1000 / 30;
+// Confiance minimale de MediaPipe pour trouver et suivre une main (0,5 par défaut) :
+// plus bas, les mains se perdent moins souvent.
+const HAND_CONFIDENCE = 0.15;
+
+const COLORS = ['#00c2d1', '#ff5b5b', '#ffd23f', '#7ae582', '#ffffff'];
+const STAGE_BACKGROUND = '#10141b';
+
+// Les 21 points de la main donnés par MediaPipe (0 = poignet, 4 = bout du pouce, 8 = bout de l'index…).
+const WRIST = 0;
+const THUMB_TIP = 4;
+const INDEX_TIP = 8;
+const MIDDLE_BASE = 9;
+// Pour chaque doigt sauf le pouce : [bout, articulation du milieu].
+const FINGERS = [[8, 6], [12, 10], [16, 14], [20, 18]];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Éléments de la page et état
+// ─────────────────────────────────────────────────────────────────────────────
+
+const $ = id => document.getElementById(id);
+const stage = $('stage');
+const video = $('video');
+const scene = $('scene');
+const drawing = $('drawing');
+const overlay = $('overlay');
+const sceneCtx = scene.getContext('2d');
+const drawCtx = drawing.getContext('2d');
+const overlayCtx = overlay.getContext('2d');
+
+// Canvas de travail des styles, hors de la page.
+const work = document.createElement('canvas');
+const workCtx = work.getContext('2d', { willReadFrequently: true });
+const glowCanvas = document.createElement('canvas');
+const composite = document.createElement('canvas');
+const detectCanvas = document.createElement('canvas');
+const detectCtx = detectCanvas.getContext('2d');
+
+const state = {
+  landmarker: null,
+  connections: [],
+  mode: 'draw',
+  aspect: 4 / 3,
+  dpr: 1,
+  // Chaque trait garde ses points en coordonnées 0..1, pour survivre à un redimensionnement.
+  strokes: [],
+  current: null,
+  color: COLORS[0],
+  size: 10,
+  cursor: null,
+  pinching: false,
+  fistSince: 0,
+  fistDone: false,
+  // En mode Cadre, le centre du poing, où se dessine l'arc d'effacement.
+  fistAt: null,
+  // Les mains de la dernière détection, redessinées à chaque image affichée.
+  hands: [],
+  // target : les coins donnés par la dernière détection ; corners : ceux affichés, qui
+  // glissent vers target à chaque image ; presence : opacité du cadre, de 0 à 1.
+  frame: { corners: null, target: null, presence: 0, seenAt: 0, wasClicking: false, styledAt: 0 },
+  styleIndex: 0,
+  recorder: null,
+  recordStart: 0,
+  lastVideoTime: -1,
+  detectedAt: 0,
+  renderedAt: 0,
+  frames: 0,
+  fpsSince: performance.now(),
+};
+
+function setPill(id, text, tone = '') {
+  const pill = $(id);
+  pill.textContent = text;
+  pill.className = `pill ${tone}`;
+}
+
+function showError(text) {
+  const error = $('error');
+  error.textContent = text;
+  error.hidden = false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Chargement du modèle
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function loadModel() {
+  setPill('model-pill', 'Modèle : chargement…', 'warn');
+  try {
+    const { FilesetResolver, HandLandmarker } = await import(`${MEDIAPIPE_URL}/vision_bundle.mjs`);
+    const vision = await FilesetResolver.forVisionTasks(`${MEDIAPIPE_URL}/wasm`);
+    const create = delegate =>
+      HandLandmarker.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: MODEL_URL, delegate },
+        runningMode: 'VIDEO',
+        numHands: 2,
+        minHandDetectionConfidence: HAND_CONFIDENCE,
+        minHandPresenceConfidence: HAND_CONFIDENCE,
+        minTrackingConfidence: HAND_CONFIDENCE,
+      });
+    // La carte graphique va plus vite ; sinon, le processeur fait l'affaire.
+    let delegate = 'GPU';
+    state.landmarker = await create('GPU').catch(() => {
+      delegate = 'CPU';
+      return create('CPU');
+    });
+    state.connections = HandLandmarker.HAND_CONNECTIONS;
+    setPill('model-pill', `Modèle : prêt (${delegate})`, 'ok');
+  } catch (error) {
+    console.error(error);
+    setPill('model-pill', 'Modèle : erreur', 'bad');
+    showError('Le modèle n\'a pas pu se charger. Vérifie ta connexion, puis recharge la page.');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Caméra
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CAMERA_ERRORS = {
+  NotAllowedError: 'Tu as refusé la caméra. Clique sur l\'icône à gauche de l\'adresse pour l\'autoriser, puis recharge la page.',
+  NotFoundError: 'Aucune caméra trouvée. Branche-en une, puis recharge la page.',
+  NotReadableError: 'La caméra est déjà utilisée par une autre application. Ferme-la, puis réessaie.',
+};
+
+async function startCamera() {
+  const start = $('start');
+  start.disabled = true;
+  $('error').hidden = true;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+      audio: false,
+    });
+    video.srcObject = stream;
+    await video.play();
+    state.aspect = video.videoWidth / video.videoHeight;
+    layout();
+    $('intro').hidden = true;
+    setPill('camera-pill', 'Caméra : active', 'ok');
+  } catch (error) {
+    setPill('camera-pill', 'Caméra : indisponible', 'bad');
+    showError(CAMERA_ERRORS[error.name] ?? `La caméra n'a pas pu démarrer (${error.name}).`);
+    start.disabled = false;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Gestes : de simples calculs de distances et d'angles entre les points de la main
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Les coordonnées vont de 0 à 1 sur la largeur et sur la hauteur : on corrige x par
+// le format de l'image pour mesurer de vraies distances.
+function distance(a, b, aspect) {
+  return Math.hypot((a.x - b.x) * aspect, a.y - b.y);
+}
+
+function pinchRatio(hand, aspect) {
+  return distance(hand[THUMB_TIP], hand[INDEX_TIP], aspect) / distance(hand[WRIST], hand[MIDDLE_BASE], aspect);
+}
+
+// Un doigt est replié quand son bout est plus près du poignet que son articulation du milieu.
+function isFist(hand, aspect) {
+  return FINGERS.every(([tip, middle]) => distance(hand[tip], hand[WRIST], aspect) < distance(hand[middle], hand[WRIST], aspect));
+}
+
+// Les coins du cadre dans l'ordre du tour : index gauche, index droit, pouce droit, pouce
+// gauche, les mains rangées de gauche à droite à l'écran (en miroir comme la vidéo). Cet
+// ordre fixe garde chaque trait entre les deux mêmes doigts. active : le cadre est déjà
+// affiché, il se garde alors avec des doigts moins écartés. null si les mains ne cadrent pas.
+function frameCorners(hands, aspect, active) {
+  if (hands.length !== 2) return null;
+  const spread = active ? FRAME_KEEP_RATIO : FRAME_OPEN_RATIO;
+  if (!hands.every(hand => pinchRatio(hand, aspect) >= spread)) return null;
+  const [left, right] = [...hands].sort((a, b) => b[WRIST].x - a[WRIST].x);
+  const corners = [left[INDEX_TIP], right[INDEX_TIP], right[THUMB_TIP], left[THUMB_TIP]].map(p => ({ x: 1 - p.x, y: p.y }));
+  return areaOf(outline(corners)) >= (active ? FRAME_KEEP_AREA : FRAME_OPEN_AREA) ? corners : null;
+}
+
+// Les coins rangés autour de leur centre, pour mesurer l'aire même si les traits se croisent.
+function outline(corners) {
+  const cx = corners.reduce((sum, p) => sum + p.x, 0) / corners.length;
+  const cy = corners.reduce((sum, p) => sum + p.y, 0) / corners.length;
+  return [...corners].sort((a, b) => Math.atan2(a.y - cy, a.x - cx) - Math.atan2(b.y - cy, b.x - cx));
+}
+
+// Aire d'un polygone, en part de l'image (formule du lacet).
+function areaOf(points) {
+  let twice = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    twice += a.x * b.y - b.x * a.y;
+  }
+  return Math.abs(twice) / 2;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Boucle principale : une détection par image de la caméra
+// ─────────────────────────────────────────────────────────────────────────────
+
+function loop() {
+  requestAnimationFrame(loop);
+  if (video.readyState < 2) {
+    return;
+  }
+  const now = performance.now();
+  const dt = Math.min(100, now - (state.renderedAt || now));
+  state.renderedAt = now;
+
+  // Une détection par nouvelle image de la caméra ; en mode Cadre, au plus 30 par seconde,
+  // pour laisser du temps aux styles.
+  const fresh = video.currentTime !== state.lastVideoTime;
+  const due = state.mode === 'draw' || now - state.detectedAt >= DETECT_INTERVAL_MS;
+  if (state.landmarker && fresh && due) {
+    state.lastVideoTime = video.currentTime;
+    state.detectedAt = now;
+    state.hands = detectHands(now);
+    if (state.mode === 'draw') {
+      handleDrawing(pickDrawingHand(state.hands));
+    } else {
+      handleFrame(state.hands, now);
+    }
+  }
+  // Entre deux détections, le cadre continue de glisser vers les doigts.
+  if (state.mode === 'frame') updateFrame(now, dt);
+  renderScene(now);
+  drawOverlay(state.hands);
+  if (state.recorder) {
+    compose();
+    updateRecordPill();
+  }
+  countFrame();
+}
+
+// MediaPipe travaille sur une copie réduite de l'image : même résultat, en moins de temps.
+function detectHands(now) {
+  const height = Math.round((DETECT_WIDTH * video.videoHeight) / video.videoWidth);
+  if (detectCanvas.width !== DETECT_WIDTH || detectCanvas.height !== height) {
+    detectCanvas.width = DETECT_WIDTH;
+    detectCanvas.height = height;
+  }
+  detectCtx.drawImage(video, 0, 0, DETECT_WIDTH, height);
+  return state.landmarker.detectForVideo(detectCanvas, now).landmarks;
+}
+
+// Avec deux mains visibles, on garde celle qui est la plus proche du curseur.
+function pickDrawingHand(hands) {
+  if (hands.length < 2 || !state.cursor) return hands[0];
+  const gap = hand => Math.hypot(1 - (hand[THUMB_TIP].x + hand[INDEX_TIP].x) / 2 - state.cursor.x, (hand[THUMB_TIP].y + hand[INDEX_TIP].y) / 2 - state.cursor.y);
+  return hands.reduce((best, hand) => (gap(hand) < gap(best) ? hand : best));
+}
+
+function handleDrawing(hand) {
+  if (!hand) {
+    endStroke();
+    state.cursor = null;
+    state.pinching = false;
+    state.fistSince = 0;
+    setPill('hand-pill', 'Main : aucune');
+    return;
+  }
+
+  // Le curseur est entre le pouce et l'index, en miroir pour suivre la vidéo.
+  const raw = {
+    x: 1 - (hand[THUMB_TIP].x + hand[INDEX_TIP].x) / 2,
+    y: (hand[THUMB_TIP].y + hand[INDEX_TIP].y) / 2,
+  };
+  state.cursor = state.cursor
+    ? {
+        x: state.cursor.x + (raw.x - state.cursor.x) * SMOOTHING,
+        y: state.cursor.y + (raw.y - state.cursor.y) * SMOOTHING,
+      }
+    : raw;
+
+  // Poing maintenu : on efface une fois, puis il faut rouvrir la main pour recommencer.
+  if (isFist(hand, state.aspect)) {
+    endStroke();
+    state.pinching = false;
+    state.fistSince ||= performance.now();
+    if (!state.fistDone && performance.now() - state.fistSince >= FIST_HOLD_MS) {
+      clearDrawing();
+      state.fistDone = true;
+    }
+    setPill('hand-pill', 'Main : poing', 'warn');
+    return;
+  }
+  state.fistSince = 0;
+  state.fistDone = false;
+
+  const ratio = pinchRatio(hand, state.aspect);
+  state.pinching = state.pinching ? ratio < PINCH_END : ratio < PINCH_START;
+  if (state.pinching) {
+    addPoint(state.cursor);
+    setPill('hand-pill', 'Main : dessine', 'ok');
+  } else {
+    endStroke();
+    setPill('hand-pill', 'Main : ouverte', 'ok');
+  }
+}
+
+function handleFrame(hands, now) {
+  const frame = state.frame;
+  const aspect = state.aspect;
+
+  // Deux mains ouvertes : chaque bout de pouce et d'index est un coin du cadre.
+  frame.target = frameCorners(hands, aspect, frame.corners !== null);
+  if (frame.target) frame.seenAt = now;
+
+  // Poing maintenu d'une main : efface le dessin, comme en mode Dessin.
+  const fist = hands.find(hand => isFist(hand, aspect));
+  if (fist) {
+    state.fistSince ||= now;
+    state.fistAt = { x: 1 - fist[MIDDLE_BASE].x, y: fist[MIDDLE_BASE].y };
+    if (!state.fistDone && now - state.fistSince >= FIST_HOLD_MS) {
+      clearDrawing();
+      state.fistDone = true;
+    }
+  } else {
+    state.fistSince = 0;
+    state.fistDone = false;
+    state.fistAt = null;
+  }
+
+  // Un clic des deux mains à la fois (pouce contre index) : style suivant, une fois par
+  // geste. Comme pour le dessin, il faut rouvrir plus grand pour relâcher le clic. Un poing
+  // n'est pas un clic.
+  const ratios = hands.map(hand => pinchRatio(hand, aspect));
+  const closed = ratios.filter(ratio => ratio < PINCH_START).length;
+  const clicking = !fist && hands.length === 2 && ratios.every(ratio => ratio < (frame.wasClicking ? PINCH_END : PINCH_START));
+  if (clicking && !frame.wasClicking && frame.presence > 0.5 && now - frame.styledAt >= STYLE_COOLDOWN_MS) {
+    nextStyle();
+    frame.styledAt = now;
+  }
+  frame.wasClicking = clicking;
+  // Le cadre reste en place tant qu'une main est refermée, le temps que l'autre la rejoigne.
+  if ((closed > 0 || clicking) && frame.corners) frame.seenAt = now;
+
+  if (fist) {
+    setPill('hand-pill', state.fistDone ? 'Poing : dessin effacé' : 'Poing : efface le dessin…', 'warn');
+  } else if (frame.corners && closed === 1 && !clicking) {
+    setPill('hand-pill', `Cadre : ${STYLES[state.styleIndex].name} · clique aussi avec l'autre main`, 'ok');
+  } else if (frame.corners) {
+    setPill('hand-pill', `Cadre : ${STYLES[state.styleIndex].name}`, 'ok');
+  } else if (hands.length < 2) {
+    setPill('hand-pill', `Mains : ${hands.length}/2`, hands.length ? 'warn' : '');
+  } else {
+    setPill('hand-pill', 'Mains : 2, écarte pouce et index', 'warn');
+  }
+}
+
+// À chaque image affichée, le cadre glisse vers les doigts : lentement quand ils bougent peu,
+// vite quand ils bougent beaucoup. Il apparaît et disparaît en fondu.
+function updateFrame(now, dt) {
+  const frame = state.frame;
+  const target = frame.target;
+  if (target) {
+    if (!frame.corners) {
+      frame.corners = target.map(p => ({ ...p }));
+    } else {
+      // Déplacement moyen des coins, en part de la largeur de l'image.
+      const moved = frame.corners.reduce((sum, p, i) => sum + Math.hypot(target[i].x - p.x, (target[i].y - p.y) / state.aspect), 0) / 4;
+      const follow = Math.min(FRAME_FOLLOW_MAX, Math.max(FRAME_FOLLOW_MIN, moved / FRAME_FAST_MOVE));
+      // Le même lissage quel que soit le rafraîchissement de l'écran (60, 120 i/s…).
+      const step = 1 - (1 - follow) ** (dt / (1000 / 60));
+      frame.corners = frame.corners.map((p, i) => ({ x: p.x + (target[i].x - p.x) * step, y: p.y + (target[i].y - p.y) * step }));
+    }
+    frame.presence = Math.min(1, frame.presence + dt / FRAME_FADE_IN_MS);
+  } else if (frame.corners && now - frame.seenAt > FRAME_GRACE_MS) {
+    frame.presence = Math.max(0, frame.presence - dt / FRAME_FADE_OUT_MS);
+    if (frame.presence === 0) frame.corners = null;
+  }
+}
+
+function countFrame() {
+  state.frames += 1;
+  const now = performance.now();
+  if (now - state.fpsSince >= 1000) {
+    setPill('fps-pill', `${Math.round((state.frames * 1000) / (now - state.fpsSince))} i/s`);
+    state.frames = 0;
+    state.fpsSince = now;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Styles du cadre : chacun transforme une petite image de travail, ensuite
+// agrandie dans le cadre. Pour en ajouter un, ajoute une entrée à STYLES.
+//   width  : largeur de l'image de travail (plus petit = plus rapide et plus flou),
+//            ou une fonction de la largeur du cadre à l'écran
+//   css    : filtre CSS appliqué en copiant la vidéo (grayscale, contrast, blur…)
+//   pixels : retouche des pixels un par un (data = [r, g, b, a, r, g, b, a, …])
+//   after  : dessin par-dessus l'image de travail ; decorate : par-dessus le cadre agrandi
+//   smooth : false pour garder des pixels nets à l'agrandissement
+// ─────────────────────────────────────────────────────────────────────────────
+
+function lumaOf(data) {
+  const out = new Float32Array(data.length / 4);
+  for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+    out[j] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+  }
+  return out;
+}
+
+// Force des contours (filtre de Sobel) : grand là où la luminosité change brusquement.
+function edgesOf(luma, width, height) {
+  const out = new Float32Array(luma.length);
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const i = y * width + x;
+      const gx = luma[i - width + 1] + 2 * luma[i + 1] + luma[i + width + 1]
+        - luma[i - width - 1] - 2 * luma[i - 1] - luma[i + width - 1];
+      const gy = luma[i + width - 1] + 2 * luma[i + width] + luma[i + width + 1]
+        - luma[i - width - 1] - 2 * luma[i - width] - luma[i - width + 1];
+      out[i] = Math.hypot(gx, gy);
+    }
+  }
+  return out;
+}
+
+function posterize(data, levels) {
+  const step = 255 / (levels - 1);
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = Math.round(data[i] / step) * step;
+    data[i + 1] = Math.round(data[i + 1] / step) * step;
+    data[i + 2] = Math.round(data[i + 2] / step) * step;
+  }
+}
+
+function setPixel(data, i, [r, g, b]) {
+  data[i] = r;
+  data[i + 1] = g;
+  data[i + 2] = b;
+}
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [n >> 16, (n >> 8) & 255, n & 255];
+}
+
+// Une table de 256 couleurs qui passe d'une teinte à l'autre selon la luminosité.
+function gradient(...colors) {
+  const stops = colors.map(hexToRgb);
+  const table = new Uint8ClampedArray(256 * 3);
+  for (let v = 0; v < 256; v++) {
+    const t = (v / 255) * (stops.length - 1);
+    const k = Math.min(stops.length - 2, Math.floor(t));
+    for (let c = 0; c < 3; c++) {
+      table[v * 3 + c] = stops[k][c] + (stops[k + 1][c] - stops[k][c]) * (t - k);
+    }
+  }
+  return table;
+}
+
+function mapLuma(data, table) {
+  for (let i = 0; i < data.length; i += 4) {
+    const v = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) * 3;
+    setPixel(data, i, [table[v], table[v + 1], table[v + 2]]);
+  }
+}
+
+// Décale le rouge d'un côté et le bleu de l'autre, comme une vieille télé.
+function shiftChannels(data, width, height, offset) {
+  const copy = data.slice();
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      data[i] = copy[(y * width + Math.min(width - 1, x + offset)) * 4];
+      data[i + 2] = copy[(y * width + Math.max(0, x - offset)) * 4 + 2];
+    }
+  }
+}
+
+// Filtre de Kuwahara : lisse les zones en gardant les bords, ce qui donne un rendu peint.
+function kuwahara(data, width, height, radius) {
+  const source = data.slice();
+  const luma = lumaOf(source);
+  const quadrants = [[-radius, -radius], [0, -radius], [-radius, 0], [0, 0]];
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let best = Infinity;
+      let color = [0, 0, 0];
+      for (const [qx, qy] of quadrants) {
+        let sum = 0;
+        let squares = 0;
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        let n = 0;
+        for (let dy = qy; dy <= qy + radius; dy++) {
+          const yy = Math.min(height - 1, Math.max(0, y + dy));
+          for (let dx = qx; dx <= qx + radius; dx++) {
+            const j = yy * width + Math.min(width - 1, Math.max(0, x + dx));
+            sum += luma[j];
+            squares += luma[j] * luma[j];
+            r += source[j * 4];
+            g += source[j * 4 + 1];
+            b += source[j * 4 + 2];
+            n++;
+          }
+        }
+        const variance = squares / n - (sum / n) ** 2;
+        if (variance < best) {
+          best = variance;
+          color = [r / n, g / n, b / n];
+        }
+      }
+      setPixel(data, (y * width + x) * 4, color);
+    }
+  }
+}
+
+function vignette(ctx, width, height) {
+  const shade = ctx.createRadialGradient(width / 2, height / 2, Math.min(width, height) * 0.25, width / 2, height / 2, Math.max(width, height) * 0.7);
+  shade.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  shade.addColorStop(1, 'rgba(0, 0, 0, 0.7)');
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 0, width, height);
+}
+
+// Halo lumineux : on ajoute par-dessus une copie floue de l'image.
+function glow(ctx, width, height) {
+  glowCanvas.width = width;
+  glowCanvas.height = height;
+  glowCanvas.getContext('2d').drawImage(work, 0, 0);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.filter = 'blur(3px)';
+  ctx.drawImage(glowCanvas, 0, 0);
+  ctx.restore();
+}
+
+// Les plots ronds sur chaque brique.
+function studs(ctx, x, y, width, height, columns, rows) {
+  const cellWidth = width / columns;
+  const cellHeight = height / rows;
+  const radius = Math.min(cellWidth, cellHeight) * 0.3;
+  ctx.save();
+  ctx.beginPath();
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
+      const cx = x + (column + 0.5) * cellWidth;
+      const cy = y + (row + 0.5) * cellHeight;
+      ctx.moveTo(cx + radius, cy);
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    }
+  }
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+  ctx.lineWidth = state.dpr;
+  ctx.stroke();
+  ctx.restore();
+}
+
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+const NEON = Array.from({ length: 360 }, (_, hue) => {
+  const k = n => (n + hue / 30) % 12;
+  const f = n => 0.55 - 0.45 * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+  return [f(0) * 255, f(8) * 255, f(4) * 255];
+});
+const INK = gradient('#1c1c1c', '#5a5a5a', '#b8b3a7', '#efe9dc');
+const JADE = gradient('#0b2e22', '#2f7d5b', '#8fd1a8', '#e6f7ec');
+const GOLD = gradient('#2b1a05', '#8a5a12', '#d4a017', '#ffe08a', '#fff8dc');
+const PORCELAIN = gradient('#0b2a6f', '#2f5fb3', '#9db7e0', '#f6f8fc');
+const POP = ['#111111', '#e5007d', '#00a7e1', '#ffe600'].map(hexToRgb);
+const PAPER_RED = hexToRgb('#c8102e');
+const PAPER = hexToRgb('#f7efe2');
+
+const STYLES = [
+  {
+    name: 'Cartoon',
+    width: 320,
+    css: 'saturate(1.6) contrast(1.1)',
+    pixels: ({ data, width, height }) => {
+      const edges = edgesOf(lumaOf(data), width, height);
+      posterize(data, 5);
+      for (let j = 0; j < edges.length; j++) {
+        if (edges[j] > 110) setPixel(data, j * 4, [25, 25, 30]);
+      }
+    },
+  },
+  { name: 'Pixel', width: w => w / 12, smooth: false, css: 'saturate(1.3)' },
+  {
+    name: 'Croquis',
+    width: 360,
+    pixels: ({ data, width, height }) => {
+      const luma = lumaOf(data);
+      const edges = edgesOf(luma, width, height);
+      for (let j = 0; j < luma.length; j++) {
+        const v = Math.max(0, Math.min(255 - edges[j] * 1.1, 205 + luma[j] * 0.2));
+        setPixel(data, j * 4, [v, v, v * 0.96]);
+      }
+    },
+  },
+  { name: 'Noir', width: 420, css: 'grayscale(1) contrast(1.7) brightness(0.9)', after: vignette },
+  {
+    name: 'Briques',
+    width: w => w / 18,
+    smooth: false,
+    css: 'saturate(1.5)',
+    pixels: ({ data }) => posterize(data, 6),
+    decorate: studs,
+  },
+  {
+    name: 'Manga',
+    width: 360,
+    pixels: ({ data, width, height }) => {
+      const luma = lumaOf(data);
+      const edges = edgesOf(luma, width, height);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const j = y * width + x;
+          // Trame de points : plus la zone est sombre, plus il y a d'encre.
+          const threshold = (BAYER[(y % 4) * 4 + (x % 4)] + 0.5) / 16;
+          const v = edges[j] > 90 || luma[j] / 255 < threshold ? 20 : 250;
+          setPixel(data, j * 4, [v, v, v]);
+        }
+      }
+    },
+  },
+  {
+    name: 'Néon',
+    width: 320,
+    pixels: ({ data, width, height }, now) => {
+      const edges = edgesOf(lumaOf(data), width, height);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const j = y * width + x;
+          const light = Math.min(1, edges[j] / 140);
+          const [r, g, b] = NEON[Math.floor((x / width) * 180 + now / 20) % 360];
+          setPixel(data, j * 4, [r * light, g * light, b * light]);
+        }
+      }
+    },
+    after: glow,
+  },
+  {
+    name: 'Aquarelle',
+    width: 240,
+    css: 'saturate(1.6) blur(1.5px) brightness(1.08)',
+    pixels: ({ data }) => {
+      posterize(data, 6);
+      for (let i = 0; i < data.length; i += 4) {
+        setPixel(data, i, [data[i] * 0.85 + 38, data[i + 1] * 0.85 + 38, data[i + 2] * 0.85 + 38]);
+      }
+    },
+  },
+  { name: 'Pâte à modeler', width: 200, css: 'saturate(1.8) contrast(1.15) blur(1px)', pixels: ({ data }) => posterize(data, 5) },
+  {
+    name: 'Glitch',
+    width: 360,
+    pixels: ({ data, width, height }) => {
+      shiftChannels(data, width, height, 4 + Math.round(Math.random() * 6));
+      // Quelques bandes horizontales décalées au hasard.
+      for (let k = 0; k < 3; k++) {
+        const top = Math.floor(Math.random() * height);
+        const rows = 2 + Math.floor(Math.random() * height * 0.06);
+        const dx = Math.round((Math.random() - 0.5) * width * 0.15);
+        for (let y = top; y < Math.min(height, top + rows); y++) {
+          const row = data.slice(y * width * 4, (y + 1) * width * 4);
+          for (let x = 0; x < width; x++) {
+            const from = ((x - dx + width) % width) * 4;
+            data.set(row.subarray(from, from + 4), (y * width + x) * 4);
+          }
+        }
+      }
+    },
+  },
+  {
+    name: 'VHS',
+    width: 320,
+    css: 'saturate(1.4) contrast(1.1) sepia(0.2)',
+    pixels: ({ data, width, height }, now) => {
+      shiftChannels(data, width, height, 3);
+      const band = Math.floor((now / 12) % (height + 40)) - 20;
+      for (let y = 0; y < height; y++) {
+        const dark = y % 3 === 0 ? 0.75 : 1;
+        const bright = Math.abs(y - band) < 6 ? 30 : 0;
+        for (let x = 0; x < width; x++) {
+          const i = (y * width + x) * 4;
+          const noise = (Math.random() - 0.5) * 24;
+          setPixel(data, i, [data[i] * dark + noise + bright, data[i + 1] * dark + noise + bright, data[i + 2] * dark + noise + bright]);
+        }
+      }
+    },
+  },
+  {
+    name: 'Lavis',
+    width: 300,
+    css: 'grayscale(1) blur(1px) contrast(1.3)',
+    pixels: ({ data }) => {
+      posterize(data, 4);
+      mapLuma(data, INK);
+    },
+  },
+  { name: 'Jade', width: 360, css: 'contrast(1.2)', pixels: ({ data }) => mapLuma(data, JADE) },
+  {
+    name: 'Papier découpé',
+    width: 300,
+    css: 'blur(1px)',
+    pixels: ({ data }) => {
+      for (let i = 0; i < data.length; i += 4) {
+        const v = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        setPixel(data, i, v < 115 ? PAPER_RED : PAPER);
+      }
+    },
+  },
+  {
+    name: 'Feuille d\'or',
+    width: 360,
+    css: 'contrast(1.25)',
+    pixels: ({ data }) => {
+      mapLuma(data, GOLD);
+      // Quelques paillettes sur les zones claires.
+      for (let k = 0; k < 40; k++) {
+        const i = Math.floor((Math.random() * data.length) / 4) * 4;
+        if (data[i] > 200) setPixel(data, i, [255, 255, 240]);
+      }
+    },
+  },
+  { name: 'Porcelaine', width: 360, css: 'contrast(1.2)', pixels: ({ data }) => mapLuma(data, PORCELAIN) },
+  {
+    name: 'Pop Art',
+    width: 300,
+    css: 'saturate(1.5)',
+    pixels: ({ data }) => {
+      for (let i = 0; i < data.length; i += 4) {
+        const v = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        setPixel(data, i, POP[Math.min(3, Math.floor(v / 64))]);
+      }
+    },
+  },
+  {
+    name: 'Peinture',
+    width: 200,
+    css: 'saturate(1.5) contrast(1.1)',
+    pixels: ({ data, width, height }) => kuwahara(data, width, height, 3),
+  },
+];
+
+function nextStyle() {
+  setStyle((state.styleIndex + 1) % STYLES.length);
+}
+
+function setStyle(index) {
+  state.styleIndex = index;
+  $('style').value = String(index);
+}
+
+// Copie la vidéo sous le cadre, la transforme avec le style choisi, puis la recolle à
+// l'intérieur des traits qui relient les doigts, avec l'opacité alpha.
+function applyStyle(style, corners, now, alpha) {
+  // On transforme le rectangle qui contient le cadre, limité à l'image.
+  const left = Math.max(0, Math.min(...corners.map(p => p.x)));
+  const top = Math.max(0, Math.min(...corners.map(p => p.y)));
+  const right = Math.min(1, Math.max(...corners.map(p => p.x)));
+  const bottom = Math.min(1, Math.max(...corners.map(p => p.y)));
+  if (right - left < 0.01 || bottom - top < 0.01) return;
+  const rect = { x: left, y: top, w: right - left, h: bottom - top };
+  const x = rect.x * scene.width;
+  const y = rect.y * scene.height;
+  const w = rect.w * scene.width;
+  const h = rect.h * scene.height;
+  const target = typeof style.width === 'function' ? style.width(w / state.dpr) : style.width;
+  const workWidth = Math.max(8, Math.round(Math.min(target, w)));
+  const workHeight = Math.max(8, Math.round((workWidth * h) / w));
+  work.width = workWidth;
+  work.height = workHeight;
+
+  // La vidéo est en miroir à l'écran : on lit la zone symétrique, puis on la retourne.
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  workCtx.save();
+  workCtx.filter = style.css ?? 'none';
+  workCtx.translate(workWidth, 0);
+  workCtx.scale(-1, 1);
+  workCtx.drawImage(video, (1 - rect.x - rect.w) * vw, rect.y * vh, rect.w * vw, rect.h * vh, 0, 0, workWidth, workHeight);
+  workCtx.restore();
+
+  if (style.pixels) {
+    const image = workCtx.getImageData(0, 0, workWidth, workHeight);
+    style.pixels(image, now);
+    workCtx.putImageData(image, 0, 0);
+  }
+  style.after?.(workCtx, workWidth, workHeight, now);
+
+  // Seul l'intérieur des traits reçoit l'image transformée.
+  sceneCtx.save();
+  traceFrame(sceneCtx, corners);
+  sceneCtx.clip();
+  sceneCtx.globalAlpha = alpha;
+  sceneCtx.imageSmoothingEnabled = style.smooth !== false;
+  sceneCtx.drawImage(work, 0, 0, workWidth, workHeight, x, y, w, h);
+  style.decorate?.(sceneCtx, x, y, w, h, workWidth, workHeight);
+  sceneCtx.restore();
+  drawFrameDecor(corners, style.name, alpha, now);
+}
+
+function traceFrame(ctx, corners) {
+  ctx.beginPath();
+  for (const p of corners) ctx.lineTo(p.x * scene.width, p.y * scene.height);
+  ctx.closePath();
+}
+
+// Des pointillés qui défilent d'un doigt à l'autre, un point qui respire sur chaque doigt
+// et le nom du style au-dessus du coin le plus haut.
+function drawFrameDecor(corners, label, alpha, now) {
+  const ctx = sceneCtx;
+  const dpr = state.dpr;
+  const t = now / 1000;
+  const points = corners.map(p => ({ x: p.x * scene.width, y: p.y * scene.height }));
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  traceFrame(ctx, corners);
+  ctx.setLineDash([10 * dpr, 8 * dpr]);
+  ctx.lineDashOffset = -t * 40 * dpr;
+  ctx.lineWidth = 2 * dpr;
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+  ctx.shadowBlur = 6 * dpr;
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.shadowColor = 'transparent';
+
+  points.forEach((p, i) => {
+    const radius = (7 + Math.sin(t * 3 + i * 1.5) * 1.5) * dpr;
+    // Un anneau part de chaque point et s'efface en grandissant.
+    const wave = (t * 0.8 + i * 0.25) % 1;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, radius + wave * 14 * dpr, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.5 * (1 - wave)})`;
+    ctx.lineWidth = 2 * dpr;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.lineWidth = 1.5 * dpr;
+    ctx.stroke();
+  });
+
+  const highest = points.reduce((best, p) => (p.y < best.y ? p : best));
+  ctx.font = `600 ${12 * dpr}px system-ui, sans-serif`;
+  const pillHeight = 22 * dpr;
+  const pillWidth = ctx.measureText(label).width + 20 * dpr;
+  const pillX = Math.min(Math.max(0, highest.x - pillWidth / 2), scene.width - pillWidth);
+  const above = highest.y - pillHeight - 14 * dpr;
+  const pillY = above >= 0 ? above : highest.y + 14 * dpr;
+  ctx.fillStyle = 'rgba(16, 20, 27, 0.78)';
+  ctx.beginPath();
+  ctx.roundRect(pillX, pillY, pillWidth, pillHeight, pillHeight / 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, pillX + 10 * dpr, pillY + pillHeight / 2);
+  ctx.restore();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dessin
+// ─────────────────────────────────────────────────────────────────────────────
+
+function addPoint(point) {
+  if (!state.current) {
+    state.current = { color: state.color, size: state.size, points: [] };
+    state.strokes.push(state.current);
+  }
+  const last = state.current.points.at(-1);
+  // On ignore les micro-mouvements pour garder des traits légers.
+  if (!last || distance(point, last, state.aspect) > 0.002) {
+    state.current.points.push({ x: point.x, y: point.y });
+    renderDrawing();
+  }
+}
+
+function endStroke() {
+  state.current = null;
+}
+
+function clearDrawing() {
+  state.strokes = [];
+  state.current = null;
+  renderDrawing();
+}
+
+function undo() {
+  state.strokes.pop();
+  state.current = null;
+  renderDrawing();
+}
+
+// Trace un trait en courbes douces qui passent entre les points.
+function drawStroke(ctx, stroke, width, height, scale) {
+  const points = stroke.points;
+  if (points.length === 0) return;
+  ctx.strokeStyle = stroke.color;
+  ctx.fillStyle = stroke.color;
+  ctx.lineWidth = stroke.size * scale;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (points.length === 1) {
+    ctx.beginPath();
+    ctx.arc(points[0].x * width, points[0].y * height, (stroke.size * scale) / 2, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
+  ctx.beginPath();
+  ctx.moveTo(points[0].x * width, points[0].y * height);
+  for (let i = 1; i < points.length - 1; i++) {
+    const middleX = ((points[i].x + points[i + 1].x) / 2) * width;
+    const middleY = ((points[i].y + points[i + 1].y) / 2) * height;
+    ctx.quadraticCurveTo(points[i].x * width, points[i].y * height, middleX, middleY);
+  }
+  const last = points.at(-1);
+  ctx.lineTo(last.x * width, last.y * height);
+  ctx.stroke();
+}
+
+function renderDrawing() {
+  drawCtx.clearRect(0, 0, drawing.width, drawing.height);
+  for (const stroke of state.strokes) {
+    drawStroke(drawCtx, stroke, drawing.width, drawing.height, state.dpr);
+  }
+}
+
+// La vidéo en miroir, puis le cadre stylisé par-dessus.
+function renderScene(now) {
+  const { width, height } = scene;
+  if ($('show-video').checked) {
+    sceneCtx.save();
+    sceneCtx.translate(width, 0);
+    sceneCtx.scale(-1, 1);
+    sceneCtx.drawImage(video, 0, 0, width, height);
+    sceneCtx.restore();
+  } else {
+    sceneCtx.fillStyle = STAGE_BACKGROUND;
+    sceneCtx.fillRect(0, 0, width, height);
+  }
+  const frame = state.frame;
+  if (state.mode === 'frame' && frame.corners && frame.presence > 0) {
+    applyStyle(STYLES[state.styleIndex], frame.corners, now, frame.presence);
+  }
+}
+
+function drawOverlay(hands) {
+  const { width, height } = overlay;
+  overlayCtx.clearRect(0, 0, width, height);
+
+  if ($('show-skeleton').checked) {
+    for (const hand of hands) {
+      overlayCtx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+      overlayCtx.lineWidth = 2 * state.dpr;
+      overlayCtx.beginPath();
+      for (const { start, end } of state.connections) {
+        overlayCtx.moveTo((1 - hand[start].x) * width, hand[start].y * height);
+        overlayCtx.lineTo((1 - hand[end].x) * width, hand[end].y * height);
+      }
+      overlayCtx.stroke();
+      overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      for (const point of hand) {
+        overlayCtx.beginPath();
+        overlayCtx.arc((1 - point.x) * width, point.y * height, 3 * state.dpr, 0, Math.PI * 2);
+        overlayCtx.fill();
+      }
+    }
+  }
+
+  if (state.mode === 'frame') {
+    if (state.fistAt) drawFistArc(state.fistAt.x * width, state.fistAt.y * height, 24 * state.dpr);
+    return;
+  }
+  if (!state.cursor) return;
+  const x = state.cursor.x * width;
+  const y = state.cursor.y * height;
+  const radius = Math.max(8, state.size / 2 + 4) * state.dpr;
+  overlayCtx.lineWidth = 2.5 * state.dpr;
+  overlayCtx.strokeStyle = state.color;
+  overlayCtx.beginPath();
+  overlayCtx.arc(x, y, radius, 0, Math.PI * 2);
+  overlayCtx.stroke();
+  if (state.pinching) {
+    overlayCtx.fillStyle = state.color;
+    overlayCtx.beginPath();
+    overlayCtx.arc(x, y, (state.size / 2) * state.dpr, 0, Math.PI * 2);
+    overlayCtx.fill();
+  }
+  drawFistArc(x, y, radius + 6 * state.dpr);
+}
+
+// Pendant le poing, un arc se remplit jusqu'à l'effacement.
+function drawFistArc(x, y, radius) {
+  if (!state.fistSince || state.fistDone) return;
+  const progress = Math.min(1, (performance.now() - state.fistSince) / FIST_HOLD_MS);
+  overlayCtx.strokeStyle = '#ff5b5b';
+  overlayCtx.lineWidth = 4 * state.dpr;
+  overlayCtx.beginPath();
+  overlayCtx.arc(x, y, radius, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
+  overlayCtx.stroke();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Photo et vidéo : la scène et le dessin réunis, sans le squelette ni le curseur
+// ─────────────────────────────────────────────────────────────────────────────
+
+function compose() {
+  if (composite.width !== scene.width || composite.height !== scene.height) {
+    composite.width = scene.width;
+    composite.height = scene.height;
+  }
+  const ctx = composite.getContext('2d');
+  ctx.drawImage(scene, 0, 0);
+  ctx.drawImage(drawing, 0, 0);
+  return composite;
+}
+
+function download(blob, name) {
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+function takePhoto() {
+  compose().toBlob(blob => download(blob, 'main-levee-photo.png'));
+}
+
+function toggleRecording() {
+  const button = $('record');
+  if (state.recorder) {
+    state.recorder.stop();
+    return;
+  }
+  compose();
+  const type = ['video/mp4;codecs=avc1', 'video/webm;codecs=vp9', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t));
+  const recorder = new MediaRecorder(composite.captureStream(30), type ? { mimeType: type } : undefined);
+  const chunks = [];
+  recorder.ondataavailable = event => {
+    if (event.data.size) chunks.push(event.data);
+  };
+  recorder.onstop = () => {
+    const extension = recorder.mimeType.includes('mp4') ? 'mp4' : 'webm';
+    download(new Blob(chunks, { type: recorder.mimeType }), `main-levee-video.${extension}`);
+    state.recorder = null;
+    button.textContent = 'Filmer';
+    button.classList.remove('recording');
+    $('record-pill').hidden = true;
+  };
+  recorder.start(250);
+  state.recorder = recorder;
+  state.recordStart = performance.now();
+  button.textContent = 'Arrêter';
+  button.classList.add('recording');
+  $('record-pill').hidden = false;
+  updateRecordPill();
+}
+
+function updateRecordPill() {
+  const seconds = Math.floor((performance.now() - state.recordStart) / 1000);
+  const text = `Enregistrement ${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+  if ($('record-pill').textContent !== text) setPill('record-pill', text, 'bad');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mise en page : la scène garde le format de la caméra et remplit la place libre
+// ─────────────────────────────────────────────────────────────────────────────
+
+function layout() {
+  const main = stage.parentElement;
+  const styles = getComputedStyle(main);
+  const availableWidth = main.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight);
+  const availableHeight = main.clientHeight - parseFloat(styles.paddingTop) - parseFloat(styles.paddingBottom);
+  let width = availableWidth;
+  let height = width / state.aspect;
+  if (height > availableHeight) {
+    height = availableHeight;
+    width = height * state.aspect;
+  }
+  stage.style.width = `${Math.floor(width)}px`;
+  stage.style.height = `${Math.floor(height)}px`;
+
+  state.dpr = window.devicePixelRatio || 1;
+  for (const canvas of [scene, drawing, overlay]) {
+    canvas.width = Math.floor(width * state.dpr);
+    canvas.height = Math.floor(height * state.dpr);
+  }
+  sceneCtx.fillStyle = STAGE_BACKGROUND;
+  sceneCtx.fillRect(0, 0, scene.width, scene.height);
+  renderDrawing();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Outils
+// ─────────────────────────────────────────────────────────────────────────────
+
+function setMode(mode) {
+  state.mode = mode;
+  $('mode-draw').setAttribute('aria-pressed', String(mode === 'draw'));
+  $('mode-frame').setAttribute('aria-pressed', String(mode === 'frame'));
+  endStroke();
+  state.cursor = null;
+  state.pinching = false;
+  state.fistSince = 0;
+  state.fistDone = false;
+  state.fistAt = null;
+  Object.assign(state.frame, { corners: null, target: null, presence: 0 });
+}
+
+function setupTools() {
+  const swatches = $('swatches');
+  for (const color of COLORS) {
+    const swatch = document.createElement('button');
+    swatch.type = 'button';
+    swatch.className = 'swatch';
+    swatch.style.background = color;
+    swatch.setAttribute('aria-label', `Couleur ${color}`);
+    swatch.setAttribute('aria-pressed', String(color === state.color));
+    swatch.addEventListener('click', () => {
+      state.color = color;
+      for (const other of swatches.children) {
+        other.setAttribute('aria-pressed', String(other === swatch));
+      }
+    });
+    swatches.append(swatch);
+  }
+
+  const select = $('style');
+  STYLES.forEach((style, index) => select.add(new Option(style.name, String(index))));
+  select.addEventListener('change', () => setStyle(Number(select.value)));
+
+  $('mode-draw').addEventListener('click', () => setMode('draw'));
+  $('mode-frame').addEventListener('click', () => setMode('frame'));
+  $('size').addEventListener('input', event => {
+    state.size = Number(event.target.value);
+  });
+  $('undo').addEventListener('click', undo);
+  $('clear').addEventListener('click', clearDrawing);
+  $('photo').addEventListener('click', takePhoto);
+  $('record').addEventListener('click', toggleRecording);
+  $('start').addEventListener('click', startCamera);
+
+  document.addEventListener('keydown', event => {
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
+    const key = event.key.toLowerCase();
+    if ((event.metaKey || event.ctrlKey) && key === 'z') {
+      event.preventDefault();
+      undo();
+    } else if (event.metaKey || event.ctrlKey || event.altKey) {
+      return;
+    } else if (key === 'm') {
+      setMode(state.mode === 'draw' ? 'frame' : 'draw');
+    } else if (key === 'f') {
+      nextStyle();
+    } else if (key === 'p') {
+      takePhoto();
+    } else if (key === 'r') {
+      toggleRecording();
+    }
+  });
+  window.addEventListener('resize', layout);
+}
+
+setupTools();
+layout();
+loadModel();
+requestAnimationFrame(loop);
+
+// Pour expérimenter depuis la console du navigateur, par exemple : mainLevee.setStyle(3)
+window.mainLevee = { state, STYLES, setMode, setStyle };
+</script>
+</body>
+</html>
