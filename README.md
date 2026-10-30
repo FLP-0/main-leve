@@ -38,9 +38,18 @@ Ces réglages viennent de [fingerframe.app](https://fingerframe.app/). Le site n
 - **Maintien et fondu** : le cadre ne disparaît pas au premier raté de la détection.
 - **Détection allégée** : MediaPipe analyse une copie de l'image réduite à 640 pixels de large, au plus 30 fois par seconde en mode Cadre, avec des seuils de confiance bas pour perdre les mains moins souvent.
 
-### Les 18 styles
+### Les 21 styles
 
-Cartoon, Pixel, Croquis, Noir, Briques, Manga, Néon, Aquarelle, Pâte à modeler, Glitch, VHS, Lavis, Jade, Papier découpé, Feuille d'or, Porcelaine, Pop Art, Peinture.
+Cartoon, Pixel, Croquis, Noir, Briques, Manga, Néon, Aquarelle, Pâte à modeler, Glitch, VHS, Lavis, Jade, Papier découpé, Feuille d'or, Porcelaine, Pop Art, Peinture, Anime, Film 3D, Cyberpunk.
+
+C'est la panoplie de [fingerframe.app](https://fingerframe.app/) :
+
+- **Ses 18 filtres** sont les 18 premiers styles, sous des noms français. Par exemple, Toon devient Cartoon, Van Gogh devient Peinture et Lego devient Briques.
+- **Ses styles IA** (Anime, 3D Movie, Cyberpunk) sont calculés là-bas par un service payant, dans le cloud. Ici, ils sont refaits en simple traitement d'image dans le navigateur, gratuitement et sans réseau.
+  - **Anime** : trois tons à plat et un trait d'encre épais.
+  - **Film 3D** : surfaces lissées, lumière chaude et halo doux.
+  - **Cyberpunk** : palette néon rose et cyan, contours lumineux et pluie en biais.
+- **Son quatrième style IA, Lego**, correspond à Briques.
 
 On choisit le style dans la liste « Style du cadre », avec la touche `F` ou en cliquant des deux mains. Sur un Mac récent, le plus lourd (VHS) prend environ 15 ms par image, soit la moitié du temps disponible à 30 images par seconde.
 
