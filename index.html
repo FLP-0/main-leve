@@ -20,6 +20,8 @@
     --warn: #9a6200;
     --bad: #b3261e;
     --red: #d62828;
+    --red-shine: #ff3b3b;
+    --red-glow: rgba(255, 59, 59, 0.45);
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -35,6 +37,8 @@
       --warn: #e5b45a;
       --bad: #ff8a80;
       --red: #ff5b5b;
+      --red-shine: #ffe1e1;
+      --red-glow: #ff5b5b;
       color-scheme: dark;
     }
   }
@@ -111,7 +115,44 @@
     cursor: pointer;
   }
   button.tool:hover { border-color: var(--muted); }
-  .greeting { color: var(--red); font-weight: 600; }
+  .greeting {
+    margin-left: 6px;
+    color: var(--red);
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  /* Chaque lettre monte à son tour, et un reflet clair suit la vague. */
+  .greeting .letter {
+    display: inline-block;
+    white-space: pre;
+    text-shadow: 0 0 6px color-mix(in srgb, var(--red) 60%, transparent);
+    animation: wave 1.6s ease-in-out infinite, shine 1.6s ease-in-out infinite;
+    animation-delay: calc(var(--i) * 80ms);
+  }
+  @keyframes wave {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-7px); }
+  }
+  @keyframes shine {
+    0%, 60%, 100% { color: var(--red); }
+    30% {
+      color: var(--red-shine);
+      text-shadow: 0 0 6px var(--red-shine), 0 0 18px var(--red-glow), 0 0 30px var(--red-glow);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .greeting .letter { animation: none; }
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
   button.tool.recording { border-color: var(--bad); color: var(--bad); font-weight: 600; }
   button.tool[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--on-accent); font-weight: 600; }
   select {
@@ -212,7 +253,7 @@
     <button id="clear" class="tool" type="button">Effacer</button>
     <button id="photo" class="tool" type="button" title="Raccourci : P">Photo</button>
     <button id="record" class="tool" type="button" title="Raccourci : R">Filmer</button>
-    <span class="greeting">Salut Bertille</span>
+    <span id="greeting" class="greeting">Salut Bertille</span>
   </div>
 </div>
 
@@ -1755,7 +1796,28 @@ function setupTools() {
   window.addEventListener('resize', layout);
 }
 
+// Une lettre par span pour que la vague passe de l'une à l'autre ; les lecteurs d'écran
+// lisent la phrase entière, pas les lettres une à une.
+function setupGreeting() {
+  const greeting = $('greeting');
+  const text = greeting.textContent;
+  const letters = document.createElement('span');
+  letters.setAttribute('aria-hidden', 'true');
+  [...text].forEach((character, index) => {
+    const letter = document.createElement('span');
+    letter.className = 'letter';
+    letter.textContent = character;
+    letter.style.setProperty('--i', index);
+    letters.append(letter);
+  });
+  const label = document.createElement('span');
+  label.className = 'sr-only';
+  label.textContent = text;
+  greeting.replaceChildren(label, letters);
+}
+
 setupTools();
+setupGreeting();
 layout();
 loadModel();
 requestAnimationFrame(loop);
