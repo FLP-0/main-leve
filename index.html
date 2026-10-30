@@ -222,6 +222,7 @@
         <ul>
           <li><b>Dessin</b> pince pouce contre index pour tracer, clique des deux mains pour un trait droit</li>
           <li><b>Effacer</b> garde une main en poing une seconde, en mode Dessin comme en mode Cadre</li>
+          <li><b>Annuler</b> lève l'index et le majeur, pouce écarté, puis referme la main en poing : seul le dernier trait s'efface</li>
           <li><b>Cadre</b> écarte le pouce et l'index de chaque main : ces quatre doigts sont les coins d'un cadre libre, dont l'intérieur change de style</li>
           <li><b>Style suivant</b> clique avec les deux mains en même temps (pouce contre index) pendant le cadre</li>
         </ul>
@@ -259,6 +260,17 @@ const FIST_HOLD_MS = 900;
 // Clic des deux mains en mode Dessin : la première main fermée a pu commencer un trait à
 // main levée juste avant l'autre ; un trait commencé il y a moins de ce temps est retiré.
 const LINE_GRACE_MS = 500;
+
+// Annuler le dernier trait : deux doigts levés (index et majeur), tenus au moins
+// UNDO_ARM_MS, puis la main se referme en poing dans les UNDO_WINDOW_MS qui suivent. Ce
+// poing n'efface pas tout ; il faut rouvrir la main UNDO_RELEASE_MS avant qu'un poing
+// efface de nouveau tout le dessin.
+const UNDO_ARM_MS = 150;
+const UNDO_WINDOW_MS = 600;
+const UNDO_RELEASE_MS = 300;
+// Écart pouce-index minimal des deux doigts levés, mesuré comme la pince : bien plus
+// qu'une pince, pour qu'une pince doigts repliés ne soit pas prise pour ce geste.
+const UNDO_SPREAD = 0.6;
 
 // Mode Cadre, réglé comme fingerframe.app. L'écart pouce-index se mesure comme la pince,
 // en part de la paume : il faut bien écarter les doigts pour ouvrir le cadre, mais un petit
@@ -343,6 +355,10 @@ const state = {
   waitRelease: false,
   // En mode Cadre, le centre du poing, où se dessine l'arc d'effacement.
   fistAt: null,
+  // Geste d'annulation : armedSince et armedAt bornent la dernière pose deux doigts levés ;
+  // used : le poing en cours a annulé un trait, il n'efface donc pas tout ; empty : il n'y
+  // avait rien à annuler.
+  undoGesture: { armedSince: 0, armedAt: 0, used: false, openSince: 0, empty: false },
   // Les mains de la dernière détection, redessinées à chaque image affichée.
   hands: [],
   // target : les coins donnés par la dernière détection ; corners : ceux affichés, qui
@@ -450,8 +466,19 @@ function pinchRatio(hand, aspect) {
 }
 
 // Un doigt est replié quand son bout est plus près du poignet que son articulation du milieu.
+function isFolded(hand, [tip, middle], aspect) {
+  return distance(hand[tip], hand[WRIST], aspect) < distance(hand[middle], hand[WRIST], aspect);
+}
+
 function isFist(hand, aspect) {
-  return FINGERS.every(([tip, middle]) => distance(hand[tip], hand[WRIST], aspect) < distance(hand[middle], hand[WRIST], aspect));
+  return FINGERS.every(finger => isFolded(hand, finger, aspect));
+}
+
+// Deux doigts levés : index et majeur tendus, annulaire et auriculaire repliés, pouce loin
+// de l'index.
+function isTwoFingers(hand, aspect) {
+  const [index, middle, ring, pinky] = FINGERS.map(finger => isFolded(hand, finger, aspect));
+  return !index && !middle && ring && pinky && pinchRatio(hand, aspect) >= UNDO_SPREAD;
 }
 
 // Les coins du cadre dans l'ordre du tour : index gauche, index droit, pouce droit, pouce
@@ -506,6 +533,7 @@ function loop() {
     state.lastVideoTime = video.currentTime;
     state.detectedAt = now;
     state.hands = detectHands(now);
+    handleUndo(state.hands, now);
     if (state.mode === 'draw') {
       if (!handleLine(state.hands)) handleDrawing(pickDrawingHand(state.hands));
     } else {
@@ -598,6 +626,41 @@ function handleLine(hands) {
   return false;
 }
 
+// Deux doigts levés, puis la main se referme en poing : annule le dernier trait, une fois
+// par geste, dans les deux modes. Ce poing-là n'efface pas tout, même tenu longtemps.
+function handleUndo(hands, now) {
+  const gesture = state.undoGesture;
+  const aspect = state.aspect;
+  if (hands.some(hand => isTwoFingers(hand, aspect))) {
+    gesture.armedSince ||= now;
+    gesture.armedAt = now;
+    gesture.used = false;
+    gesture.openSince = 0;
+    return;
+  }
+  if (hands.some(hand => isFist(hand, aspect))) {
+    const armed = gesture.armedSince
+      && gesture.armedAt - gesture.armedSince >= UNDO_ARM_MS
+      && now - gesture.armedAt <= UNDO_WINDOW_MS;
+    if (armed) {
+      gesture.empty = state.strokes.length === 0;
+      undo();
+      gesture.used = true;
+    }
+    gesture.armedSince = 0;
+    gesture.openSince = 0;
+    return;
+  }
+  // Ni l'un ni l'autre : la main passe des deux doigts au poing, ou s'est rouverte.
+  if (now - gesture.armedAt > UNDO_WINDOW_MS) gesture.armedSince = 0;
+  gesture.openSince ||= now;
+  if (now - gesture.openSince >= UNDO_RELEASE_MS) gesture.used = false;
+}
+
+function undoMessage() {
+  return state.undoGesture.empty ? 'Main : rien à annuler' : 'Main : dernier trait annulé';
+}
+
 function handleDrawing(hand) {
   if (!hand) {
     endStroke();
@@ -617,6 +680,11 @@ function handleDrawing(hand) {
   if (isFist(hand, state.aspect)) {
     endStroke();
     state.pinching = false;
+    if (state.undoGesture.used) {
+      state.fistSince = 0;
+      setPill('hand-pill', undoMessage(), 'ok');
+      return;
+    }
     state.fistSince ||= performance.now();
     if (!state.fistDone && performance.now() - state.fistSince >= FIST_HOLD_MS) {
       clearDrawing();
@@ -630,7 +698,13 @@ function handleDrawing(hand) {
 
   const ratio = pinchRatio(hand, state.aspect);
   state.pinching = state.pinching ? ratio < PINCH_END : ratio < PINCH_START;
-  if (state.pinching && !state.waitRelease) {
+  // Juste après les deux doigts levés, la main se referme pour annuler : l'index qui se
+  // replie peut frôler le pouce, sans que ce soit une pince.
+  const undoing = performance.now() - state.undoGesture.armedAt <= UNDO_WINDOW_MS;
+  if (isTwoFingers(hand, state.aspect)) {
+    endStroke();
+    setPill('hand-pill', 'Main : ferme le poing pour annuler le dernier trait', 'ok');
+  } else if (state.pinching && !state.waitRelease && !undoing) {
     addPoint(state.cursor);
     setPill('hand-pill', 'Main : dessine', 'ok');
   } else {
@@ -647,9 +721,10 @@ function handleFrame(hands, now) {
   frame.target = frameCorners(hands, aspect, frame.corners !== null);
   if (frame.target) frame.seenAt = now;
 
-  // Poing maintenu d'une main : efface le dessin, comme en mode Dessin.
+  // Poing maintenu d'une main : efface le dessin, comme en mode Dessin. Le poing qui suit
+  // les deux doigts levés a déjà annulé le dernier trait : il n'efface rien d'autre.
   const fist = hands.find(hand => isFist(hand, aspect));
-  if (fist) {
+  if (fist && !state.undoGesture.used) {
     state.fistSince ||= now;
     state.fistAt = { x: 1 - fist[MIDDLE_BASE].x, y: fist[MIDDLE_BASE].y };
     if (!state.fistDone && now - state.fistSince >= FIST_HOLD_MS) {
@@ -676,8 +751,12 @@ function handleFrame(hands, now) {
   // Le cadre reste en place tant qu'une main est refermée, le temps que l'autre la rejoigne.
   if ((closed > 0 || clicking) && frame.corners) frame.seenAt = now;
 
-  if (fist) {
+  if (fist && state.undoGesture.used) {
+    setPill('hand-pill', undoMessage(), 'ok');
+  } else if (fist) {
     setPill('hand-pill', state.fistDone ? 'Poing : dessin effacé' : 'Poing : efface le dessin…', 'warn');
+  } else if (!frame.corners && hands.some(hand => isTwoFingers(hand, aspect))) {
+    setPill('hand-pill', 'Main : ferme le poing pour annuler le dernier trait', 'ok');
   } else if (frame.corners && closed === 1 && !clicking) {
     setPill('hand-pill', `Cadre : ${STYLES[state.styleIndex].name} · clique aussi avec l'autre main`, 'ok');
   } else if (frame.corners) {
@@ -1572,6 +1651,7 @@ function setMode(mode) {
   state.fistAt = null;
   state.line = null;
   state.waitRelease = false;
+  Object.assign(state.undoGesture, { armedSince: 0, armedAt: 0, used: false, openSince: 0 });
   Object.assign(state.frame, { corners: null, target: null, presence: 0 });
 }
 

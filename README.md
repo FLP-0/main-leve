@@ -16,6 +16,9 @@ On passe de l'un à l'autre avec les boutons « Dessin » et « Cadre » de la b
 | Pince (pouce contre index) | dessine |
 | Clic des deux mains à la fois | trace un trait droit d'une pince à l'autre ; il suit les mains tant qu'elles restent fermées et se pose quand l'une s'ouvre |
 | Poing maintenu une seconde | efface tout |
+| Deux doigts levés (index et majeur, pouce écarté), puis poing | annule le dernier trait ; ce poing n'efface pas le reste, même tenu longtemps |
+
+Pour annuler, les deux doigts doivent rester levés un instant (0,15 seconde), puis la main se referme en moins de 0,6 seconde. Une main qui se referme d'un coup ne fait donc qu'un poing ordinaire. La pastille affiche « ferme le poing pour annuler le dernier trait » dès qu'elle voit les deux doigts. Pour annuler encore un trait, on relève les deux doigts puis on referme. Après une annulation, il faut rouvrir la main avant qu'un poing efface tout.
 
 Pour le trait droit, la première main fermée commence souvent un petit trait à main levée juste avant l'autre. Ce petit trait, commencé moins d'une demi-seconde avant le clic, est retiré. Une fois le trait droit posé, il faut ouvrir les deux mains avant de redessiner. « Annuler » enlève le trait droit d'un coup.
 
@@ -27,6 +30,7 @@ Pour le trait droit, la première main fermée commence souvent un petit trait �
 | Bouger les doigts | le cadre se déforme avec eux : trapèze, losange, n'importe quel quadrilatère |
 | Clic des deux mains à la fois (pouce contre index) pendant que le cadre est ouvert | passe au style suivant (au plus un changement toutes les 0,7 seconde) |
 | Poing d'une main maintenu une seconde | efface le dessin, comme en mode Dessin ; un arc rouge se remplit autour du poing |
+| Deux doigts levés puis poing, d'une main | annule le dernier trait, comme en mode Dessin |
 | Baisser les mains | le cadre reste 0,4 seconde en place, puis s'efface en fondu |
 
 Les côtés du cadre sont des pointillés qui défilent d'un doigt à l'autre, avec un point qui respire sur chaque doigt. Les coins sont toujours reliés dans le même ordre : index gauche, index droit, pouce droit, pouce gauche. Le cadre le plus naturel se fait donc les index en haut et les pouces en bas. Le cadre garde sa place dès qu'une main est refermée, le temps que l'autre la rejoigne : on peut cliquer une main après l'autre, et la pastille rappelle « clique aussi avec l'autre main ». Il faut rouvrir les doigts pour cliquer de nouveau. La pastille en haut à droite indique ce que la caméra voit : « Mains : 1/2 », « écarte pouce et index » ou le style en cours.
@@ -94,6 +98,7 @@ Tout est dans `index.html`, découpé en sections commentées :
 3. **Gestes** : de simples calculs de distances et d'angles entre ces points.
    - Pince : l'écart pouce-index, divisé par la taille de la paume, passe sous un seuil.
    - Poing : le bout de chaque doigt est plus près du poignet que son articulation du milieu.
+   - Deux doigts levés : l'index et le majeur tendus, l'annulaire et l'auriculaire repliés, le pouce loin de l'index (au moins 0,6 fois la paume, bien plus qu'une pince).
    - Main ouverte pour le cadre : l'écart entre le bout du pouce et le bout de l'index, mesuré comme la pince. Les coins du cadre sont les bouts de ces deux doigts, sur chaque main.
 4. **Boucle principale** : à chaque rafraîchissement de l'écran, une détection si la caméra a donné une nouvelle image, puis le dessin ou le cadre selon le mode.
 5. **Styles du cadre** : le rectangle qui contient le cadre est copié dans une petite image de travail, transformé, agrandi, puis découpé selon les traits qui relient les doigts.
@@ -133,7 +138,7 @@ mainLevee.STYLES.map(s => s.name);
 
 ## Idées pour aller plus loin
 
-- Une gomme : un autre geste, par exemple deux doigts levés.
+- Une gomme qui efface là où passe le doigt : un autre geste, par exemple la main à plat.
 - Changer de couleur en pointant une pastille avec le doigt.
 - Plusieurs cadres à la fois, chacun avec son style.
 - Un cadre à six coins : ajouter le creux entre le pouce et l'index de chaque main (points 2 et 5).
