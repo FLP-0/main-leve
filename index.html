@@ -1388,24 +1388,7 @@ function drawOverlay(hands) {
   const { width, height } = overlay;
   overlayCtx.clearRect(0, 0, width, height);
 
-  if ($('show-skeleton').checked) {
-    for (const hand of hands) {
-      overlayCtx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
-      overlayCtx.lineWidth = 2 * state.dpr;
-      overlayCtx.beginPath();
-      for (const { start, end } of state.connections) {
-        overlayCtx.moveTo((1 - hand[start].x) * width, hand[start].y * height);
-        overlayCtx.lineTo((1 - hand[end].x) * width, hand[end].y * height);
-      }
-      overlayCtx.stroke();
-      overlayCtx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      for (const point of hand) {
-        overlayCtx.beginPath();
-        overlayCtx.arc((1 - point.x) * width, point.y * height, 3 * state.dpr, 0, Math.PI * 2);
-        overlayCtx.fill();
-      }
-    }
-  }
+  if ($('show-skeleton').checked) drawSkeleton(overlayCtx, hands, width, height);
 
   if (state.mode === 'frame') {
     if (state.fistAt) drawFistArc(state.fistAt.x * width, state.fistAt.y * height, 24 * state.dpr);
@@ -1431,6 +1414,27 @@ function drawOverlay(hands) {
     overlayCtx.fill();
   }
   drawFistArc(x, y, radius + 6 * state.dpr);
+}
+
+// Le squelette de chaque main, en miroir comme la vidéo : les os en traits, les 21 points
+// en ronds.
+function drawSkeleton(ctx, hands, width, height) {
+  for (const hand of hands) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.lineWidth = 2 * state.dpr;
+    ctx.beginPath();
+    for (const { start, end } of state.connections) {
+      ctx.moveTo((1 - hand[start].x) * width, hand[start].y * height);
+      ctx.lineTo((1 - hand[end].x) * width, hand[end].y * height);
+    }
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    for (const point of hand) {
+      ctx.beginPath();
+      ctx.arc((1 - point.x) * width, point.y * height, 3 * state.dpr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 }
 
 // Aperçu du trait droit, de la couleur et de l'épaisseur choisies, avec un anneau sur
@@ -1460,10 +1464,11 @@ function drawFistArc(x, y, radius) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Photo et vidéo : la scène et le dessin réunis, sans le squelette ni le curseur
+// Photo et vidéo : la scène et le dessin réunis, sans le curseur. La photo garde aussi le
+// squelette quand la case « Squelette » est cochée.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function compose() {
+function compose({ skeleton = false } = {}) {
   if (composite.width !== scene.width || composite.height !== scene.height) {
     composite.width = scene.width;
     composite.height = scene.height;
@@ -1471,6 +1476,7 @@ function compose() {
   const ctx = composite.getContext('2d');
   ctx.drawImage(scene, 0, 0);
   ctx.drawImage(drawing, 0, 0);
+  if (skeleton) drawSkeleton(ctx, state.hands, composite.width, composite.height);
   return composite;
 }
 
@@ -1483,7 +1489,7 @@ function download(blob, name) {
 }
 
 function takePhoto() {
-  compose().toBlob(blob => download(blob, 'main-levee-photo.png'));
+  compose({ skeleton: $('show-skeleton').checked }).toBlob(blob => download(blob, 'main-levee-photo.png'));
 }
 
 function toggleRecording() {

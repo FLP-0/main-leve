@@ -58,7 +58,7 @@ On choisit le style dans la liste « Style du cadre », avec la touche `F` ou en
 
 ## Photo et vidéo
 
-- **Photo** (touche `P`) enregistre `main-levee-photo.png` : la vidéo, le cadre stylisé et le dessin, comme à l'écran.
+- **Photo** (touche `P`) enregistre `main-levee-photo.png` : la vidéo, le cadre stylisé et le dessin, comme à l'écran, plus le squelette des mains quand la case « Squelette » est cochée.
 - **Filmer** (touche `R`) enregistre la même image en vidéo. Le bouton devient « Arrêter » et une pastille rouge compte le temps. Au second clic, le fichier `main-levee-video.mp4` (ou `.webm` selon le navigateur) est téléchargé.
 
 ## Raccourcis
