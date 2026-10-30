@@ -220,7 +220,7 @@
       <div class="intro-card">
         <h2>Dessine et cadre avec tes mains</h2>
         <ul>
-          <li><b>Dessin</b> pince pouce contre index pour tracer</li>
+          <li><b>Dessin</b> pince pouce contre index pour tracer, clique des deux mains pour un trait droit</li>
           <li><b>Effacer</b> garde une main en poing une seconde, en mode Dessin comme en mode Cadre</li>
           <li><b>Cadre</b> écarte le pouce et l'index de chaque main : ces quatre doigts sont les coins d'un cadre libre, dont l'intérieur change de style</li>
           <li><b>Style suivant</b> clique avec les deux mains en même temps (pouce contre index) pendant le cadre</li>
@@ -255,6 +255,10 @@ const SMOOTHING = 0.35;
 
 // Durée pendant laquelle il faut garder le poing fermé pour tout effacer.
 const FIST_HOLD_MS = 900;
+
+// Clic des deux mains en mode Dessin : la première main fermée a pu commencer un trait à
+// main levée juste avant l'autre ; un trait commencé il y a moins de ce temps est retiré.
+const LINE_GRACE_MS = 500;
 
 // Mode Cadre, réglé comme fingerframe.app. L'écart pouce-index se mesure comme la pince,
 // en part de la paume : il faut bien écarter les doigts pour ouvrir le cadre, mais un petit
@@ -332,6 +336,11 @@ const state = {
   pinching: false,
   fistSince: 0,
   fistDone: false,
+  strokeStartedAt: 0,
+  // Trait droit en cours entre les deux mains ({ from, to }). Une fois posé, toutes les
+  // mains doivent s'ouvrir avant de redessiner (waitRelease).
+  line: null,
+  waitRelease: false,
   // En mode Cadre, le centre du poing, où se dessine l'arc d'effacement.
   fistAt: null,
   // Les mains de la dernière détection, redessinées à chaque image affichée.
@@ -498,7 +507,7 @@ function loop() {
     state.detectedAt = now;
     state.hands = detectHands(now);
     if (state.mode === 'draw') {
-      handleDrawing(pickDrawingHand(state.hands));
+      if (!handleLine(state.hands)) handleDrawing(pickDrawingHand(state.hands));
     } else {
       handleFrame(state.hands, now);
     }
@@ -525,11 +534,68 @@ function detectHands(now) {
   return state.landmarker.detectForVideo(detectCanvas, now).landmarks;
 }
 
+// Le point entre le pouce et l'index, en miroir pour suivre la vidéo.
+function pinchPoint(hand) {
+  return {
+    x: 1 - (hand[THUMB_TIP].x + hand[INDEX_TIP].x) / 2,
+    y: (hand[THUMB_TIP].y + hand[INDEX_TIP].y) / 2,
+  };
+}
+
+// Lissage : on avance d'une part SMOOTHING vers la nouvelle position.
+function follow(from, to) {
+  return {
+    x: from.x + (to.x - from.x) * SMOOTHING,
+    y: from.y + (to.y - from.y) * SMOOTHING,
+  };
+}
+
 // Avec deux mains visibles, on garde celle qui est la plus proche du curseur.
 function pickDrawingHand(hands) {
   if (hands.length < 2 || !state.cursor) return hands[0];
-  const gap = hand => Math.hypot(1 - (hand[THUMB_TIP].x + hand[INDEX_TIP].x) / 2 - state.cursor.x, (hand[THUMB_TIP].y + hand[INDEX_TIP].y) / 2 - state.cursor.y);
+  const gap = hand => {
+    const point = pinchPoint(hand);
+    return Math.hypot(point.x - state.cursor.x, point.y - state.cursor.y);
+  };
   return hands.reduce((best, hand) => (gap(hand) < gap(best) ? hand : best));
+}
+
+// Clic des deux mains : un trait droit d'une pince à l'autre. Il suit les mains tant
+// qu'elles restent fermées et se pose quand l'une d'elles s'ouvre. Renvoie true tant que
+// le trait droit occupe les mains.
+function handleLine(hands) {
+  const aspect = state.aspect;
+  const threshold = state.line ? PINCH_END : PINCH_START;
+  const both = hands.length === 2
+    && !hands.some(hand => isFist(hand, aspect))
+    && hands.every(hand => pinchRatio(hand, aspect) < threshold);
+  if (both) {
+    if (!state.line && state.current && performance.now() - state.strokeStartedAt < LINE_GRACE_MS) {
+      // La première main fermée vient de commencer un trait à main levée : on le retire.
+      state.strokes.pop();
+      renderDrawing();
+    }
+    endStroke();
+    state.cursor = null;
+    state.pinching = false;
+    // Les mains rangées de gauche à droite, pour que chaque bout du trait garde sa main.
+    const [from, to] = [...hands].sort((a, b) => b[WRIST].x - a[WRIST].x).map(pinchPoint);
+    state.line = state.line ? { from: follow(state.line.from, from), to: follow(state.line.to, to) } : { from, to };
+    setPill('hand-pill', 'Mains : trait droit', 'ok');
+    return true;
+  }
+  if (state.line) {
+    // Une main s'ouvre : le trait se pose.
+    state.strokes.push({ color: state.color, size: state.size, points: [state.line.from, state.line.to] });
+    renderDrawing();
+    state.line = null;
+    state.waitRelease = true;
+  }
+  // Après un trait droit, aucune main ne redessine avant que toutes se soient ouvertes.
+  if (state.waitRelease && hands.every(hand => pinchRatio(hand, aspect) >= PINCH_END)) {
+    state.waitRelease = false;
+  }
+  return false;
 }
 
 function handleDrawing(hand) {
@@ -537,22 +603,15 @@ function handleDrawing(hand) {
     endStroke();
     state.cursor = null;
     state.pinching = false;
+    state.waitRelease = false;
     state.fistSince = 0;
     setPill('hand-pill', 'Main : aucune');
     return;
   }
 
-  // Le curseur est entre le pouce et l'index, en miroir pour suivre la vidéo.
-  const raw = {
-    x: 1 - (hand[THUMB_TIP].x + hand[INDEX_TIP].x) / 2,
-    y: (hand[THUMB_TIP].y + hand[INDEX_TIP].y) / 2,
-  };
-  state.cursor = state.cursor
-    ? {
-        x: state.cursor.x + (raw.x - state.cursor.x) * SMOOTHING,
-        y: state.cursor.y + (raw.y - state.cursor.y) * SMOOTHING,
-      }
-    : raw;
+  // Le curseur est entre le pouce et l'index.
+  const raw = pinchPoint(hand);
+  state.cursor = state.cursor ? follow(state.cursor, raw) : raw;
 
   // Poing maintenu : on efface une fois, puis il faut rouvrir la main pour recommencer.
   if (isFist(hand, state.aspect)) {
@@ -571,12 +630,12 @@ function handleDrawing(hand) {
 
   const ratio = pinchRatio(hand, state.aspect);
   state.pinching = state.pinching ? ratio < PINCH_END : ratio < PINCH_START;
-  if (state.pinching) {
+  if (state.pinching && !state.waitRelease) {
     addPoint(state.cursor);
     setPill('hand-pill', 'Main : dessine', 'ok');
   } else {
     endStroke();
-    setPill('hand-pill', 'Main : ouverte', 'ok');
+    setPill('hand-pill', state.waitRelease ? 'Mains : trait posé, ouvre les mains' : 'Main : ouverte', 'ok');
   }
 }
 
@@ -1246,6 +1305,7 @@ function addPoint(point) {
   if (!state.current) {
     state.current = { color: state.color, size: state.size, points: [] };
     state.strokes.push(state.current);
+    state.strokeStartedAt = performance.now();
   }
   const last = state.current.points.at(-1);
   // On ignore les micro-mouvements pour garder des traits légers.
@@ -1351,6 +1411,10 @@ function drawOverlay(hands) {
     if (state.fistAt) drawFistArc(state.fistAt.x * width, state.fistAt.y * height, 24 * state.dpr);
     return;
   }
+  if (state.line) {
+    drawLinePreview(width, height);
+    return;
+  }
   if (!state.cursor) return;
   const x = state.cursor.x * width;
   const y = state.cursor.y * height;
@@ -1367,6 +1431,21 @@ function drawOverlay(hands) {
     overlayCtx.fill();
   }
   drawFistArc(x, y, radius + 6 * state.dpr);
+}
+
+// Aperçu du trait droit, de la couleur et de l'épaisseur choisies, avec un anneau sur
+// chaque main.
+function drawLinePreview(width, height) {
+  const { from, to } = state.line;
+  drawStroke(overlayCtx, { color: state.color, size: state.size, points: [from, to] }, width, height, state.dpr);
+  const radius = Math.max(8, state.size / 2 + 4) * state.dpr;
+  overlayCtx.lineWidth = 2.5 * state.dpr;
+  overlayCtx.strokeStyle = '#ffffff';
+  for (const point of [from, to]) {
+    overlayCtx.beginPath();
+    overlayCtx.arc(point.x * width, point.y * height, radius, 0, Math.PI * 2);
+    overlayCtx.stroke();
+  }
 }
 
 // Pendant le poing, un arc se remplit jusqu'à l'effacement.
@@ -1485,6 +1564,8 @@ function setMode(mode) {
   state.fistSince = 0;
   state.fistDone = false;
   state.fistAt = null;
+  state.line = null;
+  state.waitRelease = false;
   Object.assign(state.frame, { corners: null, target: null, presence: 0 });
 }
 

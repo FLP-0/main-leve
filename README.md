@@ -14,7 +14,10 @@ On passe de l'un à l'autre avec les boutons « Dessin » et « Cadre » de la b
 | --- | --- |
 | Main ouverte | déplace le curseur |
 | Pince (pouce contre index) | dessine |
+| Clic des deux mains à la fois | trace un trait droit d'une pince à l'autre ; il suit les mains tant qu'elles restent fermées et se pose quand l'une s'ouvre |
 | Poing maintenu une seconde | efface tout |
+
+Pour le trait droit, la première main fermée commence souvent un petit trait à main levée juste avant l'autre. Ce petit trait, commencé moins d'une demi-seconde avant le clic, est retiré. Une fois le trait droit posé, il faut ouvrir les deux mains avant de redessiner. « Annuler » enlève le trait droit d'un coup.
 
 ### Cadre
 
