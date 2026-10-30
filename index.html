@@ -222,7 +222,7 @@
       <div class="intro-card">
         <h2>Dessine et cadre avec tes mains</h2>
         <ul>
-          <li><b>Dessin</b> pince pouce contre index pour tracer, clique des deux mains pour un trait droit</li>
+          <li><b>Dessin</b> colle le pouce contre l'index pour tracer, les deux mains à la fois pour un trait droit</li>
           <li><b>Gomme</b> choisis « Gomme » (touche E) : la pince efface au lieu de tracer, à l'épaisseur du curseur</li>
           <li><b>Effacer</b> garde une main en poing une seconde, en mode Dessin comme en mode Cadre</li>
           <li><b>Annuler</b> lève l'index et le majeur, pouce écarté, puis referme la main en poing : seul le dernier trait s'efface</li>
@@ -249,10 +249,15 @@ const MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 
 // La pince se mesure en "écart pouce-index / taille de la paume", pour que ça marche
-// que ta main soit près ou loin de la caméra. Deux seuils différents évitent les traits
-// hachés quand on hésite autour de la limite.
+// que ta main soit près ou loin de la caméra. Deux seuils différents évitent les clics
+// et les traits hachés quand on hésite autour de la limite.
+// Clic du mode Cadre (style suivant) :
 const PINCH_START = 0.3;
 const PINCH_END = 0.45;
+// Pinceau et trait droit du mode Dessin : seulement pouce et index collés. Le seuil pour
+// relâcher est à peine plus large, pour qu'un tremblement ne coupe pas le trait.
+const DRAW_START = 0.18;
+const DRAW_END = 0.25;
 
 // Lissage du curseur : 1 = brut (tremble), plus petit = plus lisse mais plus lent.
 const SMOOTHING = 0.35;
@@ -601,7 +606,7 @@ function pickDrawingHand(hands) {
 // le trait droit occupe les mains.
 function handleLine(hands) {
   const aspect = state.aspect;
-  const threshold = state.line ? PINCH_END : PINCH_START;
+  const threshold = state.line ? DRAW_END : DRAW_START;
   const both = hands.length === 2
     && !hands.some(hand => isFist(hand, aspect))
     && hands.every(hand => pinchRatio(hand, aspect) < threshold);
@@ -628,7 +633,7 @@ function handleLine(hands) {
     state.waitRelease = true;
   }
   // Après un trait droit, aucune main ne redessine avant que toutes se soient ouvertes.
-  if (state.waitRelease && hands.every(hand => pinchRatio(hand, aspect) >= PINCH_END)) {
+  if (state.waitRelease && hands.every(hand => pinchRatio(hand, aspect) >= DRAW_END)) {
     state.waitRelease = false;
   }
   return false;
@@ -705,7 +710,7 @@ function handleDrawing(hand) {
   state.fistDone = false;
 
   const ratio = pinchRatio(hand, state.aspect);
-  state.pinching = state.pinching ? ratio < PINCH_END : ratio < PINCH_START;
+  state.pinching = state.pinching ? ratio < DRAW_END : ratio < DRAW_START;
   // Juste après les deux doigts levés, la main se referme pour annuler : l'index qui se
   // replie peut frôler le pouce, sans que ce soit une pince.
   const undoing = performance.now() - state.undoGesture.armedAt <= UNDO_WINDOW_MS;

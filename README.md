@@ -13,18 +13,18 @@ On passe de l'un à l'autre avec les boutons « Dessin » et « Cadre » de la b
 | Geste | Effet |
 | --- | --- |
 | Main ouverte | déplace le curseur |
-| Pince (pouce contre index) | dessine ; avec la gomme, efface |
-| Clic des deux mains à la fois | trace un trait droit d'une pince à l'autre ; il suit les mains tant qu'elles restent fermées et se pose quand l'une s'ouvre |
+| Pouce et index collés | dessine ; avec la gomme, efface |
+| Pouce et index collés sur les deux mains à la fois | trace un trait droit d'une main à l'autre ; il suit les mains tant qu'elles restent collées et se pose quand l'une s'ouvre |
 | Poing maintenu une seconde | efface tout |
 | Deux doigts levés (index et majeur, pouce écarté), puis poing | annule le dernier trait ; ce poing n'efface pas le reste, même tenu longtemps |
 
 Pour annuler, les deux doigts doivent rester levés un instant (0,15 seconde), puis la main se referme en moins de 0,6 seconde. Une main qui se referme d'un coup ne fait donc qu'un poing ordinaire. La pastille affiche « ferme le poing pour annuler le dernier trait » dès qu'elle voit les deux doigts. Pour annuler encore un trait, on relève les deux doigts puis on referme. Après une annulation, il faut rouvrir la main avant qu'un poing efface tout.
 
-Pour le trait droit, la première main fermée commence souvent un petit trait à main levée juste avant l'autre. Ce petit trait, commencé moins d'une demi-seconde avant le clic, est retiré. Une fois le trait droit posé, il faut ouvrir les deux mains avant de redessiner. « Annuler » enlève le trait droit d'un coup.
+Pour le trait droit, la première main collée commence souvent un petit trait à main levée juste avant l'autre. Ce petit trait, commencé moins d'une demi-seconde avant que l'autre main se colle, est retiré. Une fois le trait droit posé, il faut ouvrir les deux mains avant de redessiner. « Annuler » enlève le trait droit d'un coup.
 
 ### Gomme
 
-Le bouton « Gomme », à côté des couleurs (touche `E`), change la pince en gomme pinceau : elle efface le dessin là où elle passe, à l'épaisseur réglée par le curseur « Épaisseur », comme le feutre. Le clic des deux mains trace alors un trait droit qui efface. À l'écran, le curseur devient un cercle blanc en pointillés et la pastille indique « Main : gomme ». Choisir une couleur repose la gomme.
+Le bouton « Gomme », à côté des couleurs (touche `E`), change la pince en gomme pinceau : elle efface le dessin là où elle passe, à l'épaisseur réglée par le curseur « Épaisseur », comme le feutre. Les deux mains collées à la fois tracent alors un trait droit qui efface. À l'écran, le curseur devient un cercle blanc en pointillés et la pastille indique « Main : gomme ». Choisir une couleur repose la gomme.
 
 Un coup de gomme compte comme un trait : « Annuler », `Cmd+Z` ou deux doigts levés puis poing font réapparaître ce qu'il avait effacé.
 
@@ -134,6 +134,8 @@ Tout est dans `index.html`, découpé en sections commentées :
 2. **Chargement du modèle** : MediaPipe repère 21 points sur chaque main, jusqu'à deux mains, sur chaque image de la caméra.
 3. **Gestes** : de simples calculs de distances et d'angles entre ces points.
    - Pince : l'écart pouce-index, divisé par la taille de la paume, passe sous un seuil.
+     - En mode Dessin, le pinceau ne s'active que les doigts collés : sous 0,18 fois la paume. Il se relâche au-delà de 0,25, pour qu'un tremblement ne coupe pas le trait.
+     - En mode Cadre, le clic pour changer de style est plus large : 0,3 pour cliquer, 0,45 pour relâcher.
    - Poing : le bout de chaque doigt est plus près du poignet que son articulation du milieu.
    - Deux doigts levés : l'index et le majeur tendus, l'annulaire et l'auriculaire repliés, le pouce loin de l'index (au moins 0,6 fois la paume, bien plus qu'une pince).
    - Main ouverte pour le cadre : l'écart entre le bout du pouce et le bout de l'index, mesuré comme la pince. Les coins du cadre sont les bouts de ces deux doigts, sur chaque main.
