@@ -22,6 +22,18 @@ Pour annuler, les deux doigts doivent rester levés un instant (0,15 seconde), p
 
 Pour le trait droit, la première main collée commence souvent un petit trait à main levée juste avant l'autre. Ce petit trait, commencé moins d'une demi-seconde avant que l'autre main se colle, est retiré. Une fois le trait droit posé, il faut ouvrir les deux mains avant de redessiner. « Annuler » enlève le trait droit d'un coup.
 
+### Couleurs et densité
+
+La barre d'outils propose une palette de seize couleurs : une rangée de couleurs vives, une rangée de neutres et de tons profonds. À côté, le spectre donne n'importe quelle teinte : on clique ou on glisse dedans, la teinte va de gauche à droite et la clarté du blanc (en haut) au noir (en bas). Un petit rond marque la couleur choisie. Au clavier, une fois le spectre sélectionné, les flèches gauche et droite changent la teinte, haut et bas la clarté.
+
+Le curseur « Densité » règle l'opacité du trait, de 10 à 100 %. Le rond à sa gauche montre l'encre en cours sur un damier. Un trait se dessine d'un seul tenant : là où il se recroise, il ne fonce pas. La densité vaut aussi pour la couleur magique, pas pour la gomme.
+
+### Couleur magique
+
+Le bouton « Magique » peint avec l'image de la caméra : là où passe la pince, la caméra apparaît, en direct et en miroir comme la vidéo. Il ne sert que lorsque la case « Vidéo » est décochée, quand la scène est un fond sombre. Avec la vidéo affichée, il est grisé, puisque le trait ne se distinguerait pas du fond. Recocher « Vidéo » repose la couleur magique et reprend la couleur précédente.
+
+À l'écran, le curseur devient un anneau arc-en-ciel, rempli par la caméra pendant la pince, et la pastille indique « Main : couleur magique ». Le trait droit à deux mains fonctionne aussi. Les traits magiques s'annulent et s'effacent comme les autres, et la photo comme la vidéo les enregistrent tels qu'à l'écran.
+
 ### Gomme
 
 Le bouton « Gomme », à côté des couleurs (touche `E`), change la pince en gomme pinceau : elle efface le dessin là où elle passe, à l'épaisseur réglée par le curseur « Épaisseur », comme le feutre. Les deux mains collées à la fois tracent alors un trait droit qui efface. À l'écran, le curseur devient un cercle blanc en pointillés et la pastille indique « Main : gomme ». Choisir une couleur repose la gomme.
@@ -141,7 +153,7 @@ Tout est dans `index.html`, découpé en sections commentées :
    - Main ouverte pour le cadre : l'écart entre le bout du pouce et le bout de l'index, mesuré comme la pince. Les coins du cadre sont les bouts de ces deux doigts, sur chaque main.
 4. **Boucle principale** : à chaque rafraîchissement de l'écran, une détection si la caméra a donné une nouvelle image, puis le dessin ou le cadre selon le mode.
 5. **Styles du cadre** : le rectangle qui contient le cadre est copié dans une petite image de travail, transformé, agrandi, puis découpé selon les traits qui relient les doigts.
-6. **Dessin** : chaque trait garde ses points, ce qui permet d'annuler, de redimensionner et d'exporter.
+6. **Dessin** : chaque trait garde ses points, ce qui permet d'annuler, de redimensionner et d'exporter. Un trait magique se peint avec un motif tiré de l'image actuelle de la caméra ; tant qu'il en reste un, le dessin est repeint à chaque image pour qu'il suive la caméra.
 
 Les points de la main sont numérotés de 0 à 20 : 0 pour le poignet, 4 pour le bout du pouce, 8 pour le bout de l'index, 12 pour le majeur, 16 pour l'annulaire et 20 pour l'auriculaire.
 
@@ -172,6 +184,8 @@ La page expose `window.mainLevee` pour expérimenter sans caméra ni gestes :
 ```js
 mainLevee.setMode('frame');   // ou 'draw'
 mainLevee.setStyle(4);        // le 5e style, Briques
+mainLevee.setColor('#ff9f43'); // ou mainLevee.pickSpectrum(0.5, 0.3)
+mainLevee.setTool('eraser');  // 'pen', 'eraser' ou 'magic'
 mainLevee.STYLES.map(s => s.name);
 ```
 
